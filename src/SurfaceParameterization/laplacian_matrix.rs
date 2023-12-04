@@ -68,7 +68,30 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
         }
     }
 
+    // ! NOTE: only for visualization that if we normalize the matrix, we stick to the aimed UV shape
+    // normalize_matrix(&mut L);
+
     L
+}
+
+fn normalize_matrix(matrix: &mut CsrMatrix<f64>) {
+    // Find the maximum positive value in the matrix
+    let mut max_value = 0.0;
+    for value in matrix.values() {
+        if *value > 0.0 && *value > max_value {
+            max_value = *value;
+        }
+    }
+
+    if max_value > 0.0 {
+        // Normalize and clamp positive values
+        let values = matrix.values_mut();
+        for value in values.iter_mut() {
+            if *value > 0.0 {
+                *value = (*value / max_value).clamp(0.0, 1.0);
+            }
+        }
+    }
 }
 
 fn calculate_laplacian_matrix(polygon: &[Point3<f64>]) -> DMatrix<f64> {

@@ -10,6 +10,7 @@ mod mesh_definition;
 use crate::mesh_definition::TexCoord;
 
 mod io;
+mod monotileborder;
 
 #[allow(non_snake_case)]
 mod SurfaceParameterization {
@@ -45,15 +46,28 @@ pub fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<tri_mesh::VertexID>, 
     let mut length = 0.0;
     let boundary_edges = get_boundary_edges(&surface_mesh, &mut length);
 
-    println!("Length of boundary loop: {}", length);
-    // NOTE: in c++ this is the result: "Length of boundary loop: 42.3117"
-
     // Collect edges in a Vec to maintain order
     let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
 
     // Collect the boundary vertices
     let boundary_vertices = get_boundary_vertices(&edge_list);
 
+    // Initialize the mesh tex coords
+    let mut mesh_tex_coords = init_mesh_tex_coords(&surface_mesh, &boundary_vertices, length);
+
+    // Parameterize the mesh
+    SurfaceParameterization::harmonic_parameterization_helper::harmonic_parameterization(&surface_mesh, &mut mesh_tex_coords, true);
+
+    let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
+    let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
+    let save_path2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
+    io::save_uv_mesh_as_obj(&surface_mesh, &mut mesh_tex_coords, save_path2.clone()).expect("Failed to save mesh to file");
+
+    (boundary_vertices, mesh_tex_coords)
+}
+
+
+fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &Vec<tri_mesh::VertexID>, length: f64) -> mesh_definition::MeshTexCoords {
     let corner_count = 4;
     let side_length = length / corner_count as f64;
     let tolerance = 1e-4;
@@ -64,19 +78,12 @@ pub fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<tri_mesh::VertexID>, 
         mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0)); // Initialize to the origin
     }
 
-    let tex_coords = distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
+    let tex_coords = monotileborder::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
     for (&vertex_id, tex_coord) in boundary_vertices.iter().zip(tex_coords.iter()) {
         mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tex_coord.0, tex_coord.1));
     }
 
-    SurfaceParameterization::harmonic_parameterization_helper::harmonic_parameterization(&surface_mesh, &mut mesh_tex_coords, true);
-
-    let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-    let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-    let save_path2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
-    io::save_uv_mesh_as_obj(&surface_mesh, &mut mesh_tex_coords, save_path2.clone()).expect("Failed to save mesh to file");
-
-    (boundary_vertices, mesh_tex_coords)
+    mesh_tex_coords
 }
 
 
@@ -132,42 +139,7 @@ fn get_boundary_vertices(edge_list: &[(tri_mesh::VertexID, tri_mesh::VertexID)])
     boundary_vertices
 }
 
-fn distribute_vertices_around_square(boundary_vertices: &[tri_mesh::VertexID], side_length: f64, tolerance: f64, total_length: f64) -> Vec<TexCoord> {
-    let n = boundary_vertices.len();
-    let step_size = total_length / n as f64;
-    let mut vertices = Vec::new();
 
-    for i in 0..n {
-        let mut l = i as f64 * step_size;
-        let mut tex_coord;
-
-        // Determine the side and calculate the position
-        if l < side_length { // First side (bottom)
-            tex_coord = TexCoord(l / side_length, 0.0);
-        } else if l < 2.0 * side_length { // Second side (right)
-            l -= side_length;
-            tex_coord = TexCoord(1.0, l / side_length);
-        } else if l < 3.0 * side_length { // Third side (top)
-            l -= 2.0 * side_length;
-            tex_coord = TexCoord((side_length - l) / side_length, 1.0);
-        } else { // Fourth side (left)
-            l -= 3.0 * side_length;
-            tex_coord = TexCoord(0.0, (side_length - l) / side_length);
-        }
-
-        // Apply tolerance
-        if tex_coord.0 < tolerance {
-            tex_coord.0 = 0.0;
-        }
-        if tex_coord.1 < tolerance {
-            tex_coord.1 = 0.0;
-        }
-
-        vertices.push(tex_coord);
-    }
-
-    vertices
-}
 
 #[wasm_bindgen]
 extern {
@@ -297,7 +269,7 @@ mod tests {
 
         let mut length = 0.0;
         let boundary_edges = get_boundary_edges(&surface_mesh, &mut length);
-
+        assert!((length - 42.3117).abs() <= 0.001);
         assert!(length > 0.0);
         assert_eq!(boundary_edges.len(), 112);
 
@@ -348,7 +320,7 @@ mod tests {
             mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0)); // Initialize to the origin
         }
 
-        let tex_coords = distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
+        let tex_coords = monotileborder::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
         for (&vertex_id, tex_coord) in boundary_vertices.iter().zip(tex_coords.iter()) {
             mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tex_coord.0, tex_coord.1));
         }
@@ -400,6 +372,8 @@ mod tests {
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
         let B = SurfaceParameterization::harmonic_parameterization_helper::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
         let L = SurfaceParameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
+
+        // println!("L: {:?}", L);
 
         // for vertex_id in surface_mesh.vertex_iter() {
         //     // convert vertex_id to usize

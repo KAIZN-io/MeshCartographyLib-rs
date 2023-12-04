@@ -37,4 +37,4 @@ wasm:
 # Cleaning
 .PHONY: clean
 clean:
-	rm -rf $(PROJECT_DIR)/build
+	rm -rf $(PROJECT_DIR)/target
