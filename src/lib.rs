@@ -136,6 +136,30 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::iter::zip;
+    use nalgebra::DMatrix;
+    use csv::ReaderBuilder;
+    use std::error::Error;
+
+    fn load_csv_to_dmatrix(file_path: &str) -> Result<DMatrix<f64>, Box<dyn Error>> {
+        let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
+
+        let mut data = Vec::new();
+        let mut nrows = 0;
+        let mut ncols = 0;
+
+        for result in reader.records() {
+            let record = result?;
+            nrows += 1;
+            ncols = record.len();
+
+            for field in record.iter() {
+                let value: f64 = field.trim().parse()?;
+                data.push(value);
+            }
+        }
+
+        Ok(DMatrix::from_row_slice(nrows, ncols, &data))
+    }
 
     fn load_test_mesh() -> Mesh {
         let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
@@ -352,6 +376,19 @@ mod tests {
         //         // println!("L.row({:?}): {:?}", vertex_id, L.row(index_as_usize).values());
         //     }
         // }
+    }
+
+    #[test]
+    fn test_using_mocked_data() {
+        let surface_mesh = load_test_mesh();
+
+        // Load B matrix
+        let file_path = "mocked_data/B.csv";
+        let B = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
+
+        // Load L matrix
+        let file_path = "mocked_data/L.csv";
+        let L = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
     }
 
     fn create_mocked_mesh_tex_coords() -> mesh_definition::MeshTexCoords {
