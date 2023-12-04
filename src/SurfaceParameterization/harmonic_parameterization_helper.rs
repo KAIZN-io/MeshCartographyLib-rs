@@ -150,23 +150,15 @@ fn get_tripplets(L: &CsrMatrix<f64>, B: &DMatrix<f64>, BB: &mut DMatrix<f64>, id
 
 // Function to convert custom triplets to a CSR matrix
 fn build_csr_matrix<T: Copy + nalgebra::Scalar + Zero + AddAssign>(nrows: usize, ncols: usize, triplets: &[Triplet<T>]) -> CsrMatrix<T> {
-    // ? Oder ist das hier der Bug, wegen der Verwendung von HashMap?
-    let mut entries: HashMap<(usize, usize), T> = HashMap::new();
-    for triplet in triplets {
-        let key = (triplet.row, triplet.col);
-        *entries.entry(key).or_insert_with(Zero::zero) += triplet.value;
-    }
-
-    // Sort entries: first by row, then by column
-    let mut sorted_entries: Vec<_> = entries.into_iter().collect();
-    sorted_entries.sort_by_key(|&((row, col), _)| (row, col));
+    // Collect the entries
+    let entries = collect_entries(triplets);
 
     // Convert the sorted entries to vectors for CSR matrix construction
     let mut values = Vec::new();
     let mut row_indices = Vec::new();
     let mut col_ptrs = vec![0; nrows + 1];
 
-    for ((row, col), value) in sorted_entries {
+    for ((row, col), value) in entries {
         values.push(value);
         row_indices.push(col);  // Note: col indices for each row
         col_ptrs[row + 1] += 1;
@@ -184,7 +176,6 @@ fn build_csr_matrix<T: Copy + nalgebra::Scalar + Zero + AddAssign>(nrows: usize,
     csr_matrix
 }
 
-
 fn build_dense_matrix(triplets: &[Triplet<f64>], n_dofs: usize) -> DMatrix<f64> {
     let csr_matrix = build_csr_matrix(n_dofs, n_dofs, &triplets);
 
@@ -199,6 +190,22 @@ fn build_dense_matrix(triplets: &[Triplet<f64>], n_dofs: usize) -> DMatrix<f64> 
     }
 
     dense_matrix
+}
+
+
+fn collect_entries<T: Copy + nalgebra::Scalar + Zero + AddAssign>(triplets: &[Triplet<T>]) -> Vec<((usize, usize), T)> {
+    // ? Oder ist das hier der Bug, wegen der Verwendung von HashMap?
+    let mut entries: HashMap<(usize, usize), T> = HashMap::new();
+    for triplet in triplets {
+        let key = (triplet.row, triplet.col);
+        *entries.entry(key).or_insert_with(Zero::zero) += triplet.value;
+    }
+
+    // Sort entries: first by row, then by column
+    let mut sorted_entries: Vec<_> = entries.into_iter().collect();
+    sorted_entries.sort_by_key(|&((row, col), _)| (row, col));
+
+    sorted_entries
 }
 
 
