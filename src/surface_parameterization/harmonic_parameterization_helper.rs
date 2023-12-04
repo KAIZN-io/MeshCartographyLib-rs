@@ -21,7 +21,7 @@ extern crate tri_mesh;
 use tri_mesh::Mesh;
 
 use crate::mesh_definition;
-use crate::SurfaceParameterization::laplacian_matrix;
+use crate::surface_parameterization::laplacian_matrix;
 
 use crate::mesh_definition::TexCoord;
 

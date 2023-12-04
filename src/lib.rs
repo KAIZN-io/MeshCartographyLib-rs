@@ -1,84 +1,70 @@
-// wasm-pack uses wasm-bindgen to provide a bridge between the types of JavaScript and Rust
+// Import necessary modules and types
 use wasm_bindgen::prelude::*;
 use std::env;
 use std::path::PathBuf;
-
-extern crate tri_mesh;
-use tri_mesh::Mesh;
+use tri_mesh::{Mesh, VertexID};
 
 mod mesh_definition;
 use crate::mesh_definition::TexCoord;
 
 mod io;
-mod monotileborder;
+mod monotile_border;
 
 #[allow(non_snake_case)]
-mod SurfaceParameterization {
+mod surface_parameterization {
     pub mod laplacian_matrix;
     pub mod harmonic_parameterization_helper;
 }
 
-// fn print_type_of<T>(_: &T) {
-//     println!("{}", std::any::type_name::<T>())
-// }
+fn get_mesh_cartography_lib_dir() -> PathBuf {
+    PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
+}
 
+// Function to create UV surface
 #[wasm_bindgen]
 pub fn create_uv_surface() {
     log::info!("Reading mesh from file...");
 
-    let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-    let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-    let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
+    let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
+    let mesh_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
+    let save_path = mesh_cartography_lib_dir.join("ellipsoid_x4_edited.obj");
+    let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
 
     // Load the mesh
-    let surface_mesh = io::load_obj_mesh(new_path);
+    let surface_mesh = io::load_obj_mesh(mesh_path);
+    io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
-    // Save the mesh to a file
-    let save_path = mesh_cartography_lib_dir.join("ellipsoid_x4_edited.obj");
-    io::save_mesh_as_obj(&surface_mesh, save_path.clone()).expect("Failed to save mesh to file");
-
-    // Find the boundary vertices
-    find_boundary_vertices(&surface_mesh);
+    let (_boundary_vertices, mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
+    io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv)
+        .expect("Failed to save mesh to file");
 }
 
 
-pub fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<tri_mesh::VertexID>, mesh_definition::MeshTexCoords) {
-    let mut length = 0.0;
-    let boundary_edges = get_boundary_edges(&surface_mesh, &mut length);
+fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
+    let (boundary_edges, length) = get_boundary_edges(surface_mesh);
 
-    // Collect edges in a Vec to maintain order
-    let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
-
-    // Collect the boundary vertices
+    let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();  // Collect edges in a Vec to maintain order
     let boundary_vertices = get_boundary_vertices(&edge_list);
 
-    // Initialize the mesh tex coords
-    let mut mesh_tex_coords = init_mesh_tex_coords(&surface_mesh, &boundary_vertices, length);
-
+    let mut mesh_tex_coords = init_mesh_tex_coords(surface_mesh, &boundary_vertices, length);
     // Parameterize the mesh
-    SurfaceParameterization::harmonic_parameterization_helper::harmonic_parameterization(&surface_mesh, &mut mesh_tex_coords, true);
-
-    let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-    let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-    let save_path2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
-    io::save_uv_mesh_as_obj(&surface_mesh, &mut mesh_tex_coords, save_path2.clone()).expect("Failed to save mesh to file");
+    surface_parameterization::harmonic_parameterization_helper::harmonic_parameterization(surface_mesh, &mut mesh_tex_coords, true);
 
     (boundary_vertices, mesh_tex_coords)
 }
 
-
-fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &Vec<tri_mesh::VertexID>, length: f64) -> mesh_definition::MeshTexCoords {
+fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &[VertexID], length: f64) -> mesh_definition::MeshTexCoords {
     let corner_count = 4;
     let side_length = length / corner_count as f64;
     let tolerance = 1e-4;
-
-    let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(&surface_mesh);
+    let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(surface_mesh);
 
     for vertex_id in surface_mesh.vertex_iter() {
-        mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0)); // Initialize to the origin
+        mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0));  // Initialize to the origin
     }
 
-    let tex_coords = monotileborder::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
+    let tex_coords = monotile_border::distribute_vertices_around_square(boundary_vertices, side_length, tolerance, length);
+
     for (&vertex_id, tex_coord) in boundary_vertices.iter().zip(tex_coords.iter()) {
         mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tex_coord.0, tex_coord.1));
     }
@@ -86,55 +72,47 @@ fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &Vec<tri_mesh::V
     mesh_tex_coords
 }
 
-
-fn get_boundary_edges(surface_mesh: &Mesh, length: &mut f64) -> Vec<(tri_mesh::VertexID, tri_mesh::VertexID)> {
+fn get_boundary_edges(surface_mesh: &Mesh) -> (Vec<(VertexID, VertexID)>, f64) {
     let mut boundary_edges = Vec::new();
+    let mut length = 0.0;
 
     for edge in surface_mesh.edge_iter() {
-        // Returns the vertex id of the two adjacent vertices to the given edge.
-        let v0 = surface_mesh.edge_vertices(edge).0;
-        let v1 = surface_mesh.edge_vertices(edge).1;
-
+        let (v0, v1) = surface_mesh.edge_vertices(edge);
         if surface_mesh.is_vertex_on_boundary(v0) && surface_mesh.is_vertex_on_boundary(v1) {
             boundary_edges.push((v0, v1));
-            *length += surface_mesh.edge_length(edge);
+            length += surface_mesh.edge_length(edge);
         }
     }
 
-    boundary_edges
+    (boundary_edges, length)
 }
 
-
-fn get_boundary_vertices(edge_list: &[(tri_mesh::VertexID, tri_mesh::VertexID)]) -> Vec<tri_mesh::VertexID> {
+fn get_boundary_vertices(edge_list: &[(VertexID, VertexID)]) -> Vec<VertexID> {
     if edge_list.is_empty() {
         return Vec::new();
     }
 
     let mut boundary_vertices = Vec::new();
-    let mut current_vertex = edge_list[0].0; // Start with the first vertex
+    let mut current_vertex = edge_list[0].0;
     boundary_vertices.push(current_vertex);
 
     while boundary_vertices.len() <= edge_list.len() {
         let mut found = false;
         for &(v0, v1) in edge_list {
-            if v0 == current_vertex && !boundary_vertices.contains(&v1) {
-                current_vertex = v1;
-                boundary_vertices.push(current_vertex);
-                found = true;
-                break;
-            } else if v1 == current_vertex && !boundary_vertices.contains(&v0) {
-                current_vertex = v0;
+            if (v0 == current_vertex && !boundary_vertices.contains(&v1)) ||
+               (v1 == current_vertex && !boundary_vertices.contains(&v0)) {
+                current_vertex = if v0 == current_vertex { v1 } else { v0 };
                 boundary_vertices.push(current_vertex);
                 found = true;
                 break;
             }
         }
         if !found {
-            break; // Break if no next vertex is found
+            break;
         }
     }
 
-    assert_eq!(boundary_vertices.len(), 112); // Compared with result from C++
+    assert_eq!(boundary_vertices.len(), 112); // Ensure boundary vertices count matches expected number
 
     boundary_vertices
 }
@@ -212,19 +190,15 @@ mod tests {
     #[test]
     fn test_mesh_connectivity() {
         let surface_mesh = load_test_mesh();
-        let mut length = 0.0;
-        let boundary_edges = get_boundary_edges(&surface_mesh, &mut length);
+        let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
         let mut boundary_vertices = get_boundary_vertices(&edge_list);
 
-        // Test if the mesh is valid
         assert!(!surface_mesh.is_closed(), "Mesh is not open");
 
-        // Count the degree of each vertex
         let vertex_degree = count_open_mesh_degree(&surface_mesh, &boundary_vertices);
-
-        // Rotate to match the C++17 code
         rotate_boundary_vertices(&mut boundary_vertices, &surface_mesh, &vertex_degree);
+
 
         // Neighbors from C++17 code
         let exspected_neighbours = [7, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 4, 4, 4, 4, 4, 4, 4, 5, 3, 5, 4, 4, 4, 4, 4, 4, 4,
@@ -240,18 +214,15 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn test_neighbors_based_on_L_matrix() {
         let surface_mesh = load_test_mesh();
-        let mut length = 0.0;
-        let boundary_edges = get_boundary_edges(&surface_mesh, &mut length);
+        let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
-        let mut boundary_vertices = get_boundary_vertices(&edge_list);
+        let boundary_vertices = get_boundary_vertices(&edge_list);
 
-        // Count the degree of each vertex
         let vertex_degree = count_open_mesh_degree(&surface_mesh, &boundary_vertices);
-
-        // Get the Laplace matrix L
-        let L = SurfaceParameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
+        let L = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
 
         for vertex_id in surface_mesh.vertex_iter() {
             let index_as_u32: u32 = *vertex_id;
@@ -266,9 +237,8 @@ mod tests {
     #[test]
     fn test_find_boundary_edges() {
         let surface_mesh = load_test_mesh();
+        let (boundary_edges, length) = get_boundary_edges(&surface_mesh);
 
-        let mut length = 0.0;
-        let boundary_edges = get_boundary_edges(&surface_mesh, &mut length);
         assert!((length - 42.3117).abs() <= 0.001);
         assert!(length > 0.0);
         assert_eq!(boundary_edges.len(), 112);
@@ -281,16 +251,10 @@ mod tests {
     }
 
     #[test]
-    fn test_find_bourdary_vertices() {
+    fn test_find_boundary_vertices() {
         let surface_mesh = load_test_mesh();
-
-        let mut length = 0.0;
-        let boundary_edges = get_boundary_edges(&surface_mesh, &mut length);
-
-        // Collect edges in a Vec to maintain order
+        let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
-
-        // Collect the boundary vertices
         let boundary_vertices = get_boundary_vertices(&edge_list);
 
         assert_eq!(boundary_vertices.len(), 112);
@@ -304,9 +268,7 @@ mod tests {
     #[test]
     fn test_assign_vertices_to_boundary() {
         let surface_mesh = load_test_mesh();
-
-        let mut length = 0.0;
-        let boundary_edges = get_boundary_edges(&surface_mesh, &mut length);
+        let (boundary_edges, length) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
         let boundary_vertices = get_boundary_vertices(&edge_list);
 
@@ -320,7 +282,7 @@ mod tests {
             mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0)); // Initialize to the origin
         }
 
-        let tex_coords = monotileborder::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
+        let tex_coords = monotile_border::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
         for (&vertex_id, tex_coord) in boundary_vertices.iter().zip(tex_coords.iter()) {
             mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tex_coord.0, tex_coord.1));
         }
@@ -351,7 +313,7 @@ mod tests {
     fn test_boundary_matrix_B_creation() {
         let surface_mesh = load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
-        let B = SurfaceParameterization::harmonic_parameterization_helper::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
+        let B = surface_parameterization::harmonic_parameterization_helper::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
 
         let mut num_boundary_vertices = 0;
         for i in 0..B.nrows() {
@@ -370,8 +332,8 @@ mod tests {
     fn test_harmonic_parameterization() {
         let surface_mesh = load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
-        let B = SurfaceParameterization::harmonic_parameterization_helper::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
-        let L = SurfaceParameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
+        let _B = surface_parameterization::harmonic_parameterization_helper::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
+        let _L = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
 
         // println!("L: {:?}", L);
 

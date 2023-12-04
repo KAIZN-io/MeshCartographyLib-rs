@@ -45,7 +45,7 @@ pub fn save_mesh_as_obj(mesh: &tri_mesh::Mesh, file_path: PathBuf) -> Result<()>
     Ok(())
 }
 
-pub fn save_uv_mesh_as_obj(mesh: &tri_mesh::Mesh, mesh_tex_coords: &mut mesh_definition::MeshTexCoords, file_path: PathBuf) -> Result<()> {
+pub fn save_uv_mesh_as_obj(mesh: &tri_mesh::Mesh, mesh_tex_coords: &mesh_definition::MeshTexCoords, file_path: PathBuf) -> Result<()> {
     let mut file = File::create(file_path)?;
 
     // Add meta data
