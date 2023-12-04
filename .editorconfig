@@ -1,0 +1,33 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# Top-most EditorConfig file
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# C++ source files
+[*.{cpp,h,hpp}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+
+# CMake files
+[CMakeLists.txt]
+indent_style = space
+indent_size = 2
+
+# Specific settings for Makefile
+[Makefile]
+indent_style = tab
+indent_size = 4
+
+# Specific settings for Rust files
+[*.{rs,toml}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
