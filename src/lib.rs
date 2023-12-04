@@ -144,7 +144,7 @@ mod tests {
         io::load_obj_mesh(new_path)
     }
 
-    fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<tri_mesh::VertexID, usize> {
+    fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
         let connected_faces = Mesh::connected_components(&surface_mesh); // Vec<HashSet<FaceID>>
         let mut vertex_degree = HashMap::new();
@@ -162,7 +162,7 @@ mod tests {
         vertex_degree
     }
 
-    fn count_open_mesh_degree(surface_mesh: &Mesh, boundary_vertices: &Vec<tri_mesh::VertexID>) -> HashMap<tri_mesh::VertexID, usize> {
+    fn count_open_mesh_degree(surface_mesh: &Mesh, boundary_vertices: &Vec<VertexID>) -> HashMap<VertexID, usize> {
         let mut vertex_degree = count_mesh_degree(&surface_mesh);
 
         // Add +1 for each boundary vertex
@@ -173,7 +173,7 @@ mod tests {
         vertex_degree
     }
 
-    fn rotate_boundary_vertices(boundary_vertices: &mut Vec<tri_mesh::VertexID>, surface_mesh: &Mesh, vertex_degree: &HashMap<tri_mesh::VertexID, usize>) {
+    fn rotate_boundary_vertices(boundary_vertices: &mut Vec<VertexID>, surface_mesh: &Mesh, vertex_degree: &HashMap<VertexID, usize>) {
         // Rotate the boundary vertices so that the start vertex is at the beginning as in the C++17 code
         let mut start_vertex = surface_mesh.vertex_iter().next().unwrap();
         for vertex_id in boundary_vertices.iter() {
