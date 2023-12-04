@@ -83,7 +83,7 @@ pub fn set_boundary_constraints(mesh: &Mesh, mesh_tex_coords: &mut mesh_definiti
 }
 
 #[allow(non_snake_case)]
-fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_constrained: Vec<bool>) -> Result<DMatrix<f64>, String> {
+pub fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_constrained: Vec<bool>) -> Result<DMatrix<f64>, String> {
     let nrows = L.nrows();
     assert_eq!(4725, nrows);
 

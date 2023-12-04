@@ -137,6 +137,7 @@ mod tests {
     use std::collections::HashMap;
     use std::iter::zip;
     use nalgebra::DMatrix;
+    use nalgebra_sparse::CsrMatrix;
     use csv::ReaderBuilder;
     use std::error::Error;
 
@@ -159,6 +160,21 @@ mod tests {
         }
 
         Ok(DMatrix::from_row_slice(nrows, ncols, &data))
+    }
+
+    fn load_csv_to_bool_vec(file_path: &str) -> Result<Vec<bool>, Box<dyn Error>> {
+        let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
+
+        let mut bools = Vec::new();
+        for result in reader.records() {
+            let record = result?;
+            if let Some(field) = record.get(0) {
+                let value: u8 = field.trim().parse()?;
+                bools.push(value != 0);
+            }
+        }
+
+        Ok(bools)
     }
 
     fn load_test_mesh() -> Mesh {
@@ -381,6 +397,7 @@ mod tests {
     #[test]
     fn test_using_mocked_data() {
         let surface_mesh = load_test_mesh();
+        let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(&surface_mesh);
 
         // Load B matrix
         let file_path = "mocked_data/B.csv";
@@ -388,7 +405,34 @@ mod tests {
 
         // Load L matrix
         let file_path = "mocked_data/L.csv";
-        let L = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
+        let L: DMatrix<f64> = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
+        let L = CsrMatrix::from(&L);  // Convert to CSR matrix
+
+        // Load is_constrained vector
+        let file_path = "mocked_data/is_constrained.csv";
+        let is_constrained = load_csv_to_bool_vec(file_path).expect("Failed to load matrix");
+
+        // Solve the linear equation system
+        let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&L, &B, is_constrained);
+
+        // Assign the result to the mesh
+        match result {
+            Ok(X) => {
+                for (vertex_id, row) in surface_mesh.vertex_iter().zip(X.row_iter()) {
+                    let tex_coord = TexCoord(row[0], row[1]);
+                    // println!("tex_coord: {:?} {:?}", row[0], row[1]);
+                    mesh_tex_coords.set_tex_coord(vertex_id, tex_coord);
+                }
+            }
+            Err(e) => {
+                println!("An error occurred: {}", e);
+            }
+        }
+
+        let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
+        let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
+        io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv)
+            .expect("Failed to save mesh to file");
     }
 
     fn create_mocked_mesh_tex_coords() -> mesh_definition::MeshTexCoords {
