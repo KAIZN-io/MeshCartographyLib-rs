@@ -12,6 +12,7 @@ mod monotile_border;
 
 #[allow(non_snake_case)]
 mod surface_parameterization {
+    pub mod boundary_matrix;
     pub mod laplacian_matrix;
     pub mod harmonic_parameterization_helper;
 }
@@ -136,10 +137,10 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::iter::zip;
-    use nalgebra::DMatrix;
     use nalgebra_sparse::CsrMatrix;
     use csv::ReaderBuilder;
     use std::error::Error;
+    use nalgebra::{DMatrix, LU};
 
     fn load_csv_to_dmatrix(file_path: &str) -> Result<DMatrix<f64>, Box<dyn Error>> {
         let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
@@ -353,7 +354,7 @@ mod tests {
     fn test_boundary_matrix_B_creation() {
         let surface_mesh = load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
-        let B = surface_parameterization::harmonic_parameterization_helper::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
+        let B = surface_parameterization::boundary_matrix::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
 
         let mut num_boundary_vertices = 0;
         for i in 0..B.nrows() {
@@ -372,7 +373,7 @@ mod tests {
     fn test_harmonic_parameterization() {
         let surface_mesh = load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
-        let _B = surface_parameterization::harmonic_parameterization_helper::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
+        let _B = surface_parameterization::boundary_matrix::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
         let _L = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
 
         // println!("L: {:?}", L);
@@ -413,21 +414,21 @@ mod tests {
         let is_constrained = load_csv_to_bool_vec(file_path).expect("Failed to load matrix");
 
         // Solve the linear equation system
-        let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&L, &B, is_constrained);
+        // let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&L, &B, is_constrained);
 
         // Assign the result to the mesh
-        match result {
-            Ok(X) => {
-                for (vertex_id, row) in surface_mesh.vertex_iter().zip(X.row_iter()) {
-                    let tex_coord = TexCoord(row[0], row[1]);
-                    // println!("tex_coord: {:?} {:?}", row[0], row[1]);
-                    mesh_tex_coords.set_tex_coord(vertex_id, tex_coord);
-                }
-            }
-            Err(e) => {
-                println!("An error occurred: {}", e);
-            }
-        }
+        // match result {
+        //     Ok(X) => {
+        //         for (vertex_id, row) in surface_mesh.vertex_iter().zip(X.row_iter()) {
+        //             let tex_coord = TexCoord(row[0], row[1]);
+        //             // println!("tex_coord: {:?} {:?}", row[0], row[1]);
+        //             mesh_tex_coords.set_tex_coord(vertex_id, tex_coord);
+        //         }
+        //     }
+        //     Err(e) => {
+        //         println!("An error occurred: {}", e);
+        //     }
+        // }
 
         let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
         let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");

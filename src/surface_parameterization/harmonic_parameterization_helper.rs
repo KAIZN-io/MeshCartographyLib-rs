@@ -22,6 +22,7 @@ use tri_mesh::Mesh;
 
 use crate::mesh_definition;
 use crate::surface_parameterization::laplacian_matrix;
+use crate::surface_parameterization::boundary_matrix;
 
 use crate::mesh_definition::TexCoord;
 
@@ -45,7 +46,7 @@ pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut mesh_definit
     let L = laplacian_matrix::build_laplace_matrix(mesh, use_uniform_weights);
 
     // 2. Inject Boundary Constraints -> sets fixed boundary vertices
-    let B = set_boundary_constraints(mesh, mesh_tex_coords);
+    let B = boundary_matrix::set_boundary_constraints(mesh, mesh_tex_coords);
 
     // 3. Solve the linear equation system
     let result = solve_using_qr_decomposition(&L, &B, is_constrained);
@@ -65,22 +66,7 @@ pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut mesh_definit
 }
 
 
-pub fn set_boundary_constraints(mesh: &Mesh, mesh_tex_coords: &mut mesh_definition::MeshTexCoords) -> DMatrix<f64> {
-    // Build the RHS vector B
-    const DIM: usize = 2;
-    let mut B = DMatrix::zeros(mesh.no_vertices(), DIM);
-    for vertex_id in mesh.vertex_iter() {
-        if mesh.is_vertex_on_boundary(vertex_id) {
-            if let Some(tex_coord) = mesh_tex_coords.get_tex_coord(vertex_id) {
-                let index_as_u32: u32 = *vertex_id; // Dereference to get u32
-                let index_as_usize: usize = index_as_u32 as usize; // Cast u32 to usize
-                B.set_row(index_as_usize, &nalgebra::RowVector2::new(tex_coord.0, tex_coord.1));
-            }
-        }
-    }
 
-    B
-}
 
 #[allow(non_snake_case)]
 pub fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_constrained: Vec<bool>) -> Result<DMatrix<f64>, String> {
