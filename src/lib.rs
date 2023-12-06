@@ -137,10 +137,40 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::iter::zip;
-    use nalgebra_sparse::CsrMatrix;
+    use nalgebra_sparse::{CsrMatrix, coo::CooMatrix};
+    use nalgebra::DMatrix;
     use csv::ReaderBuilder;
     use std::error::Error;
-    use nalgebra::{DMatrix, LU};
+
+    fn load_sparse_csv_data_to_csr_matrix(file_path: &str) -> Result<CsrMatrix<f64>, Box<dyn Error>> {
+        let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
+
+        let mut row_indices = Vec::new();
+        let mut col_indices = Vec::new();
+        let mut values = Vec::new();
+        let mut max_row_index = 0;
+        let mut max_col_index = 0;
+
+        for result in reader.records() {
+            let record = result?;
+            let row_index: usize = record[0].trim().parse()?;
+            let col_index: usize = record[1].trim().parse()?;
+            let value: f64 = record[2].trim().parse()?;
+
+            row_indices.push(row_index - 1); // Assuming 1-based indices in CSV
+            col_indices.push(col_index - 1);
+            values.push(value);
+
+            max_row_index = max_row_index.max(row_index);
+            max_col_index = max_col_index.max(col_index);
+        }
+
+        // Use try_from_triplets with matrix dimensions
+        let coo_matrix = CooMatrix::try_from_triplets(max_row_index, max_col_index, row_indices, col_indices, values)?;
+
+        // Convert the CooMatrix to a CsrMatrix
+        Ok(CsrMatrix::from(&coo_matrix))
+    }
 
     fn load_csv_to_dmatrix(file_path: &str) -> Result<DMatrix<f64>, Box<dyn Error>> {
         let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
@@ -405,6 +435,9 @@ mod tests {
         let B = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
 
         // Load L matrix
+        // let file_path = "mocked_data/L_sparse.csv";
+        // let L_sparse = load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
+
         let file_path = "mocked_data/L.csv";
         let L: DMatrix<f64> = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
         let L = CsrMatrix::from(&L);  // Convert to CSR matrix
@@ -414,21 +447,21 @@ mod tests {
         let is_constrained = load_csv_to_bool_vec(file_path).expect("Failed to load matrix");
 
         // Solve the linear equation system
-        // let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&L, &B, is_constrained);
+        let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&L, &B, is_constrained);
 
         // Assign the result to the mesh
-        // match result {
-        //     Ok(X) => {
-        //         for (vertex_id, row) in surface_mesh.vertex_iter().zip(X.row_iter()) {
-        //             let tex_coord = TexCoord(row[0], row[1]);
-        //             // println!("tex_coord: {:?} {:?}", row[0], row[1]);
-        //             mesh_tex_coords.set_tex_coord(vertex_id, tex_coord);
-        //         }
-        //     }
-        //     Err(e) => {
-        //         println!("An error occurred: {}", e);
-        //     }
-        // }
+        match result {
+            Ok(X) => {
+                for (vertex_id, row) in surface_mesh.vertex_iter().zip(X.row_iter()) {
+                    let tex_coord = TexCoord(row[0], row[1]);
+                    // println!("tex_coord: {:?} {:?}", row[0], row[1]);
+                    mesh_tex_coords.set_tex_coord(vertex_id, tex_coord);
+                }
+            }
+            Err(e) => {
+                println!("An error occurred: {}", e);
+            }
+        }
 
         let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
         let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
