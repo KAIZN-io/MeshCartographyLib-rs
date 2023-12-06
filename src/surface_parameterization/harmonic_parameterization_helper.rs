@@ -67,12 +67,11 @@ pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut mesh_definit
 
 
 
-
+// ! erste Fehlerquelle, da in C++ der Solver funktioniert
+// !!!!!!!! Oder es berechnet richtig, aber wir speichern das UV mesh falsch ab
 #[allow(non_snake_case)]
 pub fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_constrained: Vec<bool>) -> Result<DMatrix<f64>, String> {
     let nrows = L.nrows();
-    assert_eq!(4725, nrows);
-
     let mut idx = vec![usize::MAX; nrows];
     let mut n_dofs = 0;
     let mut BB = DMatrix::zeros(nrows, B.ncols());
@@ -84,14 +83,12 @@ pub fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_con
         }
     }
 
-    assert_eq!(n_dofs, 4613);  // ! Test for Ellipsoid
     BB.resize_mut(n_dofs, B.ncols(), 0.0); // Resize BB after filling it
 
     // collect entries for reduced matrix
     // update rhs with constraints
-    let sparse_matrix_triplets = get_tripplets(&L, &B, &mut BB, &idx);
+    let sparse_matrix_triplets: Vec<Triplet<f64>> = get_tripplets(&L, &B, &mut BB, &idx);
 
-    // ? Build the dense matrix of the inner part of the mesh
     let dense_matrix = build_dense_matrix(&sparse_matrix_triplets, BB.nrows());
 
     // Solve the system Lxx = BB using LU decomposition
@@ -167,18 +164,8 @@ fn build_dense_matrix(sparse_matrix_triplets: &[Triplet<f64>], n_dofs: usize) ->
     let csr_matrix = build_csr_matrix(n_dofs, n_dofs, &sparse_matrix_triplets);
 
     // Convert CSR matrix to dense matrix
-    let mut dense_matrix = DMatrix::zeros(csr_matrix.nrows(), csr_matrix.ncols());
-    for triplet in csr_matrix.triplet_iter() {
-        let i = triplet.0;
-        let j = triplet.1;
-        let v = *triplet.2;
-
-        dense_matrix[(i, j)] = v;
-    }
-
-    dense_matrix
+    DMatrix::from(&csr_matrix)
 }
-
 
 fn collect_entries<T: Copy + nalgebra::Scalar + Zero + AddAssign>(sparse_matrix_triplets: &[Triplet<T>]) -> Vec<((usize, usize), T)> {
     // ? Oder ist das hier der Bug, wegen der Verwendung von HashMap?
