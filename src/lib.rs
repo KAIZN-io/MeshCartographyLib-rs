@@ -166,6 +166,7 @@ mod tests {
         }
 
         // Use try_from_triplets with matrix dimensions
+        // A COO Sparse matrix stores entries in coordinate-form, that is triplets (i, j, v), where i and j correspond to row and column indices of the entry, and v to the value of the entry
         let coo_matrix = CooMatrix::try_from_triplets(max_row_index, max_col_index, row_indices, col_indices, values)?;
 
         // Convert the CooMatrix to a CsrMatrix

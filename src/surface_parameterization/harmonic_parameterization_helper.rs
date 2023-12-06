@@ -89,10 +89,10 @@ pub fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_con
 
     // collect entries for reduced matrix
     // update rhs with constraints
-    let triplets = get_tripplets(&L, &B, &mut BB, &idx);
+    let sparse_matrix_triplets = get_tripplets(&L, &B, &mut BB, &idx);
 
     // ? Build the dense matrix of the inner part of the mesh
-    let dense_matrix = build_dense_matrix(&triplets, BB.nrows());
+    let dense_matrix = build_dense_matrix(&sparse_matrix_triplets, BB.nrows());
 
     // Solve the system Lxx = BB using LU decomposition
     let lu = LU::new(dense_matrix.clone());
@@ -111,8 +111,9 @@ pub fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_con
 }
 
 
+/// A COO Sparse matrix stores entries in coordinate-form, that is triplets (i, j, v), where i and j correspond to row and column indices of the entry, and v to the value of the entry
 fn get_tripplets(L: &CsrMatrix<f64>, B: &DMatrix<f64>, BB: &mut DMatrix<f64>, idx: &[usize]) -> Vec<Triplet<f64>> {
-    let mut triplets: Vec<Triplet<f64>> = Vec::new();
+    let mut sparse_matrix_triplets: Vec<Triplet<f64>> = Vec::new();
     for triplet in L.triplet_iter() {
         let i = triplet.0;
         let j = triplet.1;
@@ -120,7 +121,7 @@ fn get_tripplets(L: &CsrMatrix<f64>, B: &DMatrix<f64>, BB: &mut DMatrix<f64>, id
 
         if idx[i] != usize::MAX { // row is dof
             if idx[j] != usize::MAX { // col is dof
-                triplets.push(Triplet { row: idx[i], col: idx[j], value: *v });
+                sparse_matrix_triplets.push(Triplet { row: idx[i], col: idx[j], value: *v });
             } else { // col is constraint
                 // Update B
                 for col in 0..B.ncols() {
@@ -130,14 +131,14 @@ fn get_tripplets(L: &CsrMatrix<f64>, B: &DMatrix<f64>, BB: &mut DMatrix<f64>, id
         }
     }
 
-    triplets
+    sparse_matrix_triplets
 }
 
 
 // Function to convert custom triplets to a CSR matrix
-fn build_csr_matrix<T: Copy + nalgebra::Scalar + Zero + AddAssign>(nrows: usize, ncols: usize, triplets: &[Triplet<T>]) -> CsrMatrix<T> {
+fn build_csr_matrix<T: Copy + nalgebra::Scalar + Zero + AddAssign>(nrows: usize, ncols: usize, sparse_matrix_triplets: &[Triplet<T>]) -> CsrMatrix<T> {
     // Collect the entries
-    let entries = collect_entries(triplets);
+    let entries = collect_entries(sparse_matrix_triplets);
 
     // Convert the sorted entries to vectors for CSR matrix construction
     let mut values = Vec::new();
@@ -162,8 +163,8 @@ fn build_csr_matrix<T: Copy + nalgebra::Scalar + Zero + AddAssign>(nrows: usize,
     csr_matrix
 }
 
-fn build_dense_matrix(triplets: &[Triplet<f64>], n_dofs: usize) -> DMatrix<f64> {
-    let csr_matrix = build_csr_matrix(n_dofs, n_dofs, &triplets);
+fn build_dense_matrix(sparse_matrix_triplets: &[Triplet<f64>], n_dofs: usize) -> DMatrix<f64> {
+    let csr_matrix = build_csr_matrix(n_dofs, n_dofs, &sparse_matrix_triplets);
 
     // Convert CSR matrix to dense matrix
     let mut dense_matrix = DMatrix::zeros(csr_matrix.nrows(), csr_matrix.ncols());
@@ -179,10 +180,10 @@ fn build_dense_matrix(triplets: &[Triplet<f64>], n_dofs: usize) -> DMatrix<f64> 
 }
 
 
-fn collect_entries<T: Copy + nalgebra::Scalar + Zero + AddAssign>(triplets: &[Triplet<T>]) -> Vec<((usize, usize), T)> {
+fn collect_entries<T: Copy + nalgebra::Scalar + Zero + AddAssign>(sparse_matrix_triplets: &[Triplet<T>]) -> Vec<((usize, usize), T)> {
     // ? Oder ist das hier der Bug, wegen der Verwendung von HashMap?
     let mut entries: HashMap<(usize, usize), T> = HashMap::new();
-    for triplet in triplets {
+    for triplet in sparse_matrix_triplets {
         let key = (triplet.row, triplet.col);
         *entries.entry(key).or_insert_with(Zero::zero) += triplet.value;
     }
@@ -204,7 +205,7 @@ mod tests {
     fn test_build_csr_matrix() {
         let nrows = 3;
         let ncols = 3;
-        let triplets = vec![
+        let sparse_matrix_triplets = vec![
             Triplet { row: 0, col: 0, value: 1.0 },
             Triplet { row: 1, col: 1, value: 2.0 },
             Triplet { row: 2, col: 2, value: 3.0 },
@@ -215,7 +216,7 @@ mod tests {
         let expected_col_indices = vec![0, 1, 2];
 
         // Invoke the function
-        let csr_matrix = build_csr_matrix(nrows, ncols, &triplets);
+        let csr_matrix = build_csr_matrix(nrows, ncols, &sparse_matrix_triplets);
 
         // Assert results
         assert_eq!(csr_matrix.values(), &expected_values);
@@ -226,7 +227,7 @@ mod tests {
     fn test_build_csr_matrix_complex() {
         let nrows = 4;
         let ncols = 4;
-        let triplets = vec![
+        let sparse_matrix_triplets = vec![
             Triplet { row: 0, col: 0, value: 1.0 },
             Triplet { row: 0, col: 3, value: 2.0 },
             Triplet { row: 1, col: 1, value: 3.0 },
@@ -240,7 +241,7 @@ mod tests {
         let expected_col_indices = vec![0, 3, 1, 0, 2, 3];
 
         // Invoke the function
-        let csr_matrix = build_csr_matrix(nrows, ncols, &triplets);
+        let csr_matrix = build_csr_matrix(nrows, ncols, &sparse_matrix_triplets);
 
         // Assert results
         assert_eq!(csr_matrix.values(), &expected_values);
