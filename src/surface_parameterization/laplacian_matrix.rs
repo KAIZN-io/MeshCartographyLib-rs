@@ -12,7 +12,7 @@
 //! - **Todo:** Further development tasks to be determined.
 
 use nalgebra::DMatrix;
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point3, DVector, Vector3};
 use nalgebra_sparse::{CooMatrix, CsrMatrix};
 
 extern crate tri_mesh;
@@ -28,20 +28,21 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
     for face in mesh.face_iter() {
         let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
 
-        // Use each vertex individually instead of iterating over a tuple
+        // collect polygon vertices
         let vertices = [vertex1, vertex2, vertex3];
 
-        // Create an array of Point3<f64> for the triangle
+        // collect their positions
         let triangle = [
             Point3::new(mesh.vertex_position(vertex1).x, mesh.vertex_position(vertex1).y, mesh.vertex_position(vertex1).z),
             Point3::new(mesh.vertex_position(vertex2).x, mesh.vertex_position(vertex2).y, mesh.vertex_position(vertex2).z),
             Point3::new(mesh.vertex_position(vertex3).x, mesh.vertex_position(vertex3).y, mesh.vertex_position(vertex3).z),
         ];
 
-        // Compute local Laplace matrix for the triangle
-        let laplace_matrix = calculate_laplacian_matrix(&triangle);
+        // setup local laplace matrix for the triangle
+        let laplace_matrix: DMatrix<f64> = calculate_laplacian_matrix(&triangle);
 
-        // Assemble local matrices into global matrix
+        // ! collect the triplets
+        // assemble local matrices into global matrix
         for (j, &vertex_j) in vertices.iter().enumerate() {
             for (k, &vertex_k) in vertices.iter().enumerate() {
                 let index_as_u32: u32 = *vertex_j;
@@ -68,30 +69,7 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
         }
     }
 
-    // ! NOTE: only for visualization that if we normalize the matrix, we stick to the aimed UV shape
-    // normalize_matrix(&mut L);
-
     L
-}
-
-fn normalize_matrix(matrix: &mut CsrMatrix<f64>) {
-    // Find the maximum positive value in the matrix
-    let mut max_value = 0.0;
-    for value in matrix.values() {
-        if *value > 0.0 && *value > max_value {
-            max_value = *value;
-        }
-    }
-
-    if max_value > 0.0 {
-        // Normalize and clamp positive values
-        let values = matrix.values_mut();
-        for value in values.iter_mut() {
-            if *value > 0.0 {
-                *value = (*value / max_value).clamp(0.0, 1.0);
-            }
-        }
-    }
 }
 
 fn calculate_laplacian_matrix(polygon: &[Point3<f64>]) -> DMatrix<f64> {
@@ -120,6 +98,74 @@ fn cotangent_angle(v0: &Vector3<f64>, v1: &Vector3<f64>) -> f64 {
     dot / cross
 }
 
+// Helper function to compute the cross product and return its dot product with another vector
+fn dot_cross(a: &Vector3<f64>, b: &Vector3<f64>, c: &Vector3<f64>) -> f64 {
+    a.cross(b).dot(&c.cross(b))
+}
+
+// compute virtual vertex per polygon, represented by affine weights,
+// such that the resulting triangle fan minimizes the sum of squared triangle areas
+pub fn compute_virtual_vertex(poly: &DMatrix<f64>) -> DVector<f64> {
+    let n = poly.nrows();
+    let mut x = Vec::with_capacity(n);
+    let mut d = Vec::with_capacity(n);
+
+    // Setup array of positions and edges
+    for i in 0..n {
+        x.push(Vector3::new(poly[(i, 0)], poly[(i, 1)], poly[(i, 2)]));
+    }
+    for i in 0..n {
+        d.push(x[(i + 1) % n] - x[i]);
+    }
+
+    // Setup matrix A and rhs b
+    let mut A = DMatrix::zeros(n + 1, n);
+    let mut b = DVector::zeros(n + 1);
+    for j in 0..n {
+        for i in j..n {
+            let mut Aij = 0.0;
+            let mut bi = 0.0;
+            for k in 0..n {
+                Aij += dot_cross(&x[j], &d[k], &x[i]);
+                bi += dot_cross(&x[i], &d[k], &x[k]);
+            }
+            A[(i, j)] = Aij;
+            A[(j, i)] = Aij; // Symmetric entry
+            b[i] = bi;
+        }
+    }
+    for j in 0..n {
+        A[(n, j)] = 1.0;
+    }
+    b[n] = 1.0;
+
+    // Solving the linear system
+    let svd = A.svd(true, true);
+    let solution = svd.solve(&b, 1e-6).expect("SVD solve failed");
+
+    // Extracting the top 'n' rows of the solution
+    solution.rows(0, n).into()
+}
+
+fn normalize_matrix(matrix: &mut CsrMatrix<f64>) {
+    // Find the maximum positive value in the matrix
+    let mut max_value = 0.0;
+    for value in matrix.values() {
+        if *value > 0.0 && *value > max_value {
+            max_value = *value;
+        }
+    }
+
+    if max_value > 0.0 {
+        // Normalize and clamp positive values
+        let values = matrix.values_mut();
+        for value in values.iter_mut() {
+            if *value > 0.0 {
+                *value = (*value / max_value).clamp(0.0, 1.0);
+            }
+        }
+    }
+}
 
 
 #[cfg(test)]
@@ -129,12 +175,77 @@ mod tests {
     use std::env;
     use std::path::PathBuf;
     use crate::io;
+    use nalgebra_sparse::CsrMatrix;
+    use nalgebra::DMatrix;
+    use csv::ReaderBuilder;
+    use std::error::Error;
 
     fn load_test_mesh() -> Mesh {
         let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
         let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
         let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
         io::load_obj_mesh(new_path)
+    }
+
+    fn load_csv_to_dmatrix(file_path: &str) -> Result<DMatrix<f64>, Box<dyn Error>> {
+        let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
+
+        let mut data = Vec::new();
+        let mut nrows = 0;
+        let mut ncols = 0;
+
+        for result in reader.records() {
+            let record = result?;
+            nrows += 1;
+            ncols = record.len();
+
+            for field in record.iter() {
+                let value: f64 = field.trim().parse()?;
+                data.push(value);
+            }
+        }
+
+        Ok(DMatrix::from_row_slice(nrows, ncols, &data))
+    }
+
+    #[test]
+    fn test_dot_cross() {
+        let v1 = Vector3::new(1.0, 0.0, 0.0);
+        let v2 = Vector3::new(0.0, 1.0, 0.0);
+        let v3 = Vector3::new(0.0, 0.0, 1.0);
+
+        let result = dot_cross(&v1, &v2, &v3);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_dot_cross_different_vectors() {
+        let v4 = Vector3::new(1.0, 2.0, 3.0);
+        let v5 = Vector3::new(-1.0, 0.5, 2.0);
+        let v1 = Vector3::new(1.0, 0.0, 0.0);
+
+        let result = dot_cross(&v4, &v5, &v1);
+        assert_eq!(result, 11.25);
+    }
+
+    #[test]
+    fn test_dot_cross_orthogonal_vectors() {
+        let v6 = Vector3::new(0.0, 1.0, -1.0);
+        let v7 = Vector3::new(1.0, 1.0, 1.0);
+        let v1 = Vector3::new(1.0, 0.0, 0.0);
+
+        let result = dot_cross(&v6, &v7, &v1);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_dot_cross_parallel_vectors() {
+        let v8 = Vector3::new(1.0, 2.0, 3.0);
+        let v9 = Vector3::new(2.0, 4.0, 6.0);
+        let v1 = Vector3::new(1.0, 0.0, 0.0);
+
+        let result = dot_cross(&v8, &v9, &v1);
+        assert_eq!(result, 0.0);
     }
 
     #[test]
@@ -277,5 +388,18 @@ mod tests {
         for row_sum in row_sums {
             assert!(row_sum.abs() < 1e-6);
         }
+    }
+
+    #[test]
+    fn test_laplace_matrix() {
+        let surface_mesh: Mesh = load_test_mesh();
+        let laplace_matrix: CsrMatrix<f64> = build_laplace_matrix(&surface_mesh, true);
+
+        let file_path = "mocked_data/L.csv";
+        let L_dense: DMatrix<f64> = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
+        let L_sparse = CsrMatrix::from(&L_dense);  // Convert to CSR Sparse matrix
+
+        // Count the number of explicitly stored entries in the matrix
+        // assert_eq!(laplace_matrix.nnz(), L_sparse.nnz());
     }
 }
