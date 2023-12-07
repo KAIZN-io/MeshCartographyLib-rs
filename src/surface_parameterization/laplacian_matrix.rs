@@ -130,6 +130,13 @@ mod tests {
     use std::path::PathBuf;
     use crate::io;
 
+    fn load_test_mesh() -> Mesh {
+        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
+        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
+        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
+        io::load_obj_mesh(new_path)
+    }
+
     #[test]
     fn test_cotangent_angle() {
         let v0 = Vector3::new(1.0, 0.0, 0.0);
@@ -218,11 +225,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_diagonal_elements() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         for (i, j, value) in laplace_matrix.triplet_iter() {
@@ -236,11 +239,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_number_nonzero_elements() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         assert_eq!(laplace_matrix.nnz(), 32845)
@@ -248,11 +247,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_format() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         // Verify dimensions
@@ -263,11 +258,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_symmetry() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         assert_eq!(laplace_matrix, laplace_matrix.transpose());
@@ -275,11 +266,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_row_sum() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, false);
 
         let mut row_sums = vec![0.0; laplace_matrix.nrows()];
