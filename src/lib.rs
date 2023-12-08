@@ -17,6 +17,116 @@ mod surface_parameterization {
     pub mod harmonic_parameterization_helper;
 }
 
+
+use std::collections::HashMap;
+use wavefront_obj::obj::{self, Primitive};
+
+
+// Replace these with your actual types for vertices, normals, UVs, etc.
+#[derive(Debug, Clone)]
+struct Vector3 {
+    x: f64,
+    y: f64,
+    z: f64,
+}
+
+#[derive(Debug, Clone)]
+struct Vector2 {
+    u: f64,
+    v: f64,
+}
+
+struct TriMesh {
+    positions: Vec<Vector3>,
+    normals: Option<Vec<Vector3>>,
+    uvs: Option<Vec<Vector2>>,
+    indices: Vec<u32>,
+}
+
+// Function to create TriMesh from obj::ObjSet
+// fn create_tri_mesh(obj_set: obj::ObjSet) -> Result<TriMesh, String> {
+//     let mut positions = Vec::new();
+//     let mut normals = Vec::new();
+//     let mut uvs = Vec::new();
+//     let mut indices = Vec::new();
+//     let mut index_map = HashMap::new();
+//     let mut current_index = 0;
+
+//     for object in obj_set.objects {
+//         for geometry in object.geometry {
+//             for shape in geometry.shapes {
+//                 match shape.primitive {
+//                     Primitive::Triangle(v1, v2, v3) => {
+//                         for &index in &[v1, v2, v3] {
+//                             if let Some(&mapped_index) = index_map.get(&index) {
+//                                 indices.push(mapped_index);
+//                             } else {
+//                                 let vertex = object.vertices[index.0];
+//                                 positions.push(Vector3 { x: vertex.x, y: vertex.y, z: vertex.z });
+
+//                                 if let Some(uv_index) = index.1 {
+//                                     let uv = object.tex_vertices[uv_index];
+//                                     uvs.push(Vector2 { u: uv.u, v: uv.v });
+//                                 }
+
+//                                 if let Some(normal_index) = index.2 {
+//                                     let normal = object.normals[normal_index];
+//                                     normals.push(Vector3 { x: normal.x, y: normal.y, z: normal.z });
+//                                 }
+
+//                                 index_map.insert(index, current_index);
+//                                 indices.push(current_index);
+//                                 current_index += 1;
+//                             }
+//                         }
+//                     }
+//                     _ => return Err("Unsupported primitive type".to_string()),
+//                 }
+//             }
+//         }
+//     }
+
+//     Ok(TriMesh {
+//         positions,
+//         normals: if normals.is_empty() { None } else { Some(normals) },
+//         uvs: if uvs.is_empty() { None } else { Some(uvs) },
+//         indices,
+//     })
+// }
+fn create_tri_mesh(obj_set: obj::ObjSet) -> Result<TriMesh, String> {
+    let mut positions = Vec::new();
+    let mut indices = Vec::new();
+
+    for object in obj_set.objects {
+        // Directly add all vertices from the .obj file to the positions vector
+        for vertex in object.vertices {
+            positions.push(Vector3 { x: vertex.x, y: vertex.y, z: vertex.z });
+        }
+
+        // Build faces using indices from the .obj file
+        for geometry in object.geometry {
+            for shape in geometry.shapes {
+                match shape.primitive {
+                    Primitive::Triangle(v1, v2, v3) => {
+                        // Indices in .obj files are 1-based, so subtract 1 to convert to 0-based
+                        indices.push(v1.0 as u32);
+                        indices.push(v2.0 as u32);
+                        indices.push(v3.0 as u32);
+                    }
+                    _ => return Err("Unsupported primitive type".to_string()),
+                }
+            }
+        }
+    }
+
+    Ok(TriMesh {
+        positions,
+        normals: None,
+        uvs: None,
+        indices,
+    })
+}
+
 fn get_mesh_cartography_lib_dir() -> PathBuf {
     PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
 }
@@ -32,6 +142,13 @@ pub fn create_uv_surface() {
     let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
 
     // Load the mesh
+    let test_mesh = io::load_mesh_from_obj(mesh_path.clone());
+    let test_surface_mesh = create_tri_mesh(test_mesh.clone().unwrap()).unwrap();
+
+    println!("get the first vertex position: {:?}", test_surface_mesh.positions[0]);
+    println!("last vertex position: {:?}", test_surface_mesh.positions[test_surface_mesh.positions.len() - 1]);
+
+
     let surface_mesh = io::load_obj_mesh(mesh_path);
     io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
@@ -359,15 +476,15 @@ mod tests {
         let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(&surface_mesh);
 
         // Load B matrix
-        let file_path = "mocked_data/B.csv";
+        let file_path = "data/test/B.csv";
         let B_dense = io::load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
 
         // Load L matrix
-        let file_path = "mocked_data/L_sparse.csv";
+        let file_path = "data/test/L_sparse.csv";
         let L_sparse = io::load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
 
         // Load is_constrained vector
-        let file_path = "mocked_data/is_constrained.csv";
+        let file_path = "data/test/is_constrained.csv";
         let is_constrained = io::load_csv_to_bool_vec(file_path).expect("Failed to load matrix");
 
         // Solve the linear equation system
