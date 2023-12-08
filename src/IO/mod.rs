@@ -15,86 +15,83 @@ use crate::mesh_definition;
 
 use std::io::BufReader;
 use wavefront_obj::obj::{self, Primitive};
-// use three_d_asset::{Positions, TriMesh as ThreeDTriMesh};
-// use tri_mesh::*;
+use three_d_asset::{Positions, TriMesh as ThreeDTriMesh};
+use tri_mesh::*;
 
-// // Replace these with your actual types for vertices, normals, UVs, etc.
-// #[derive(Debug, Clone)]
-// struct Vector3 {
-//     x: f64,
-//     y: f64,
-//     z: f64,
-// }
+pub struct Vector3Custom {
+    x: f64,
+    y: f64,
+    z: f64,
+}
 
-// #[derive(Debug, Clone)]
-// struct Vector2 {
-//     u: f64,
-//     v: f64,
-// }
+pub struct Vector2 {
+    u: f64,
+    v: f64,
+}
 
-// struct TriMesh {
-//     positions: Vec<Vector3>,
-//     normals: Option<Vec<Vector3>>,
-//     uvs: Option<Vec<Vector2>>,
-//     indices: Vec<u32>,
-// }
+pub struct TriMesh {
+    positions: Vec<Vector3Custom>,
+    normals: Option<Vec<Vector3Custom>>,
+    uvs: Option<Vec<Vector3Custom>>,
+    indices: Vec<u32>,
+}
 
-// fn create_tri_mesh(obj_set: obj::ObjSet) -> Result<TriMesh, String> {
-//     let mut positions = Vec::new();
-//     let mut indices = Vec::new();
+fn create_tri_mesh(obj_set: obj::ObjSet) -> std::result::Result<TriMesh, String> {
+    let mut positions = Vec::new();
+    let mut indices = Vec::new();
 
-//     for object in obj_set.objects {
-//         // Directly add all vertices from the .obj file to the positions vector
-//         for vertex in object.vertices {
-//             positions.push(Vector3 { x: vertex.x, y: vertex.y, z: vertex.z });
-//         }
+    for object in obj_set.objects {
+        // Directly add all vertices from the .obj file to the positions vector
+        for vertex in object.vertices {
+            positions.push(Vector3Custom { x: vertex.x, y: vertex.y, z: vertex.z });
+        }
 
-//         // Build faces using indices from the .obj file
-//         for geometry in object.geometry {
-//             for shape in geometry.shapes {
-//                 match shape.primitive {
-//                     Primitive::Triangle(v1, v2, v3) => {
-//                         // Indices in .obj files are 1-based, so subtract 1 to convert to 0-based
-//                         indices.push(v1.0 as u32);
-//                         indices.push(v2.0 as u32);
-//                         indices.push(v3.0 as u32);
-//                     }
-//                     _ => return Err("Unsupported primitive type".to_string()),
-//                 }
-//             }
-//         }
-//     }
+        // Build faces using indices from the .obj file
+        for geometry in object.geometry {
+            for shape in geometry.shapes {
+                match shape.primitive {
+                    Primitive::Triangle(v1, v2, v3) => {
+                        // Indices in .obj files are 1-based, so subtract 1 to convert to 0-based
+                        indices.push(v1.0 as u32);
+                        indices.push(v2.0 as u32);
+                        indices.push(v3.0 as u32);
+                    }
+                    _ => return Err("Unsupported primitive type".to_string()),
+                }
+            }
+        }
+    }
 
-//     Ok(TriMesh {
-//         positions,
-//         normals: None,
-//         uvs: None,
-//         indices,
-//     })
-// }
+    Ok(TriMesh {
+        positions,
+        normals: None,
+        uvs: None,
+        indices,
+    })
+}
 
-// fn convert_to_tri_mesh_mesh(tri_mesh: TriMesh) -> Result<Mesh, String> {
-//     // Convert positions to the format expected by three_d_asset::TriMesh
-//     let positions = Positions::F64(tri_mesh.positions.iter().map(|v| {
-//         vec3(v.x, v.y, v.z) // Assuming vec3 is from three_d_asset or a similar crate
-//     }).collect());
+fn convert_to_tri_mesh_mesh(tri_mesh: TriMesh) -> std::result::Result<Mesh, String> {
+    // Convert positions to the format expected by three_d_asset::TriMesh
+    let positions = Positions::F64(tri_mesh.positions.iter().map(|v| {
+        vec3(v.x, v.y, v.z) // Assuming vec3 is from three_d_asset or a similar crate
+    }).collect());
 
-//     // Convert indices to the format expected by three_d_asset::TriMesh
-//     let indices = three_d_asset::Indices::U32(tri_mesh.indices);
+    // Convert indices to the format expected by three_d_asset::TriMesh
+    let indices = three_d_asset::Indices::U32(tri_mesh.indices);
 
-//     // Create the three_d_asset::TriMesh
-//     let three_d_tri_mesh = ThreeDTriMesh {
-//         positions,
-//         indices,
-//         ..Default::default() // Add normals, uvs, etc., if available
-//     };
+    // Create the three_d_asset::TriMesh
+    let three_d_tri_mesh = ThreeDTriMesh {
+        positions,
+        indices,
+        ..Default::default() // Add normals, uvs, etc., if available
+    };
 
-//     // Create the tri_mesh::Mesh
-//     let mesh = Mesh::new(&three_d_tri_mesh);
-//     Ok(mesh)
-// }
+    // Create the tri_mesh::Mesh
+    let mesh = Mesh::new(&three_d_tri_mesh);
+    Ok(mesh)
+}
 
-pub fn load_mesh_from_obj(path: PathBuf) -> std::result::Result<obj::ObjSet, String> {
+pub fn load_mesh_from_obj(path: PathBuf) -> std::result::Result<Mesh, String> {
     // Open the file using the PathBuf
     let mut file = File::open(&path).map_err(|e| e.to_string())?;
 
@@ -105,12 +102,11 @@ pub fn load_mesh_from_obj(path: PathBuf) -> std::result::Result<obj::ObjSet, Str
     // Parse the OBJ data
     let obj_set = obj::parse(&contents).map_err(|e| e.to_string())?;
 
-    // // Return the parsed OBJ set
+    // Create a TriMesh from the OBJ data
+    let pre_surface_mesh = create_tri_mesh(obj_set).unwrap();
+    let surface_mesh = convert_to_tri_mesh_mesh(pre_surface_mesh).unwrap();
 
-    // let test_surface_mesh = create_tri_mesh(test_mesh.clone().unwrap()).unwrap();
-    // let surface_mesh = convert_to_tri_mesh_mesh(test_surface_mesh).unwrap();
-
-    Ok(obj_set)
+    Ok(surface_mesh)
 }
 
 pub fn load_obj_mesh(path: PathBuf) -> Mesh {
