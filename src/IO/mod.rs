@@ -7,15 +7,35 @@ use nalgebra_sparse::{CsrMatrix, coo::CooMatrix};
 use nalgebra::DMatrix;
 use std::env;
 use nalgebra::{Point3, Vector3};
+use std::io::Read;
 
 use tri_mesh::Mesh;
 
 use crate::mesh_definition;
 
+use std::io::BufReader;
+use wavefront_obj::obj;
+
+pub fn load_mesh_from_obj(path: PathBuf) -> std::result::Result<obj::ObjSet, String> {
+    // Open the file using the PathBuf
+    let mut file = File::open(&path).map_err(|e| e.to_string())?;
+
+    // Read the entire file into a string
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).map_err(|e| e.to_string())?;
+
+    // Parse the OBJ data
+    let obj_set = obj::parse(&contents).map_err(|e| e.to_string())?;
+
+    // Return the parsed OBJ set
+    Ok(obj_set)
+}
+
 pub fn load_obj_mesh(path: PathBuf) -> Mesh {
     // Load the mesh from a file
     // ! BUG: Die Reihenfolge der Vertices verändert sich beim Laden, sodass ich nicht die gemockten Daten verwenden kann
-    let model: three_d_asset::Model = three_d_asset::io::load_and_deserialize(path).expect("Failed loading asset");
+    let mut assets = three_d_asset::io::load(&[path.clone()]).unwrap();
+    let model: three_d_asset::Model = assets.deserialize(path).unwrap();
     let surface_mesh = Mesh::new(&model.geometries[0]);
 
     // Test if the mesh is valid
