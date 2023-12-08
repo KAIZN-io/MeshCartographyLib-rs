@@ -209,13 +209,6 @@ mod tests {
         Ok(bools)
     }
 
-    fn load_test_mesh() -> Mesh {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-        io::load_obj_mesh(new_path)
-    }
-
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
         let connected_faces = Mesh::connected_components(&surface_mesh); // Vec<HashSet<FaceID>>
@@ -261,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_mesh_connectivity() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
         let mut boundary_vertices = get_boundary_vertices(&edge_list);
@@ -288,7 +281,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_neighbors_based_on_L_matrix() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
         let boundary_vertices = get_boundary_vertices(&edge_list);
@@ -308,7 +301,7 @@ mod tests {
 
     #[test]
     fn test_find_boundary_edges() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let (boundary_edges, length) = get_boundary_edges(&surface_mesh);
 
         assert!((length - 42.3117).abs() <= 0.001);
@@ -324,7 +317,7 @@ mod tests {
 
     #[test]
     fn test_find_boundary_vertices() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
         let boundary_vertices = get_boundary_vertices(&edge_list);
@@ -339,7 +332,7 @@ mod tests {
 
     #[test]
     fn test_assign_vertices_to_boundary() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let (boundary_edges, length) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
         let boundary_vertices = get_boundary_vertices(&edge_list);
@@ -383,7 +376,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_boundary_matrix_B_creation() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
         let B = surface_parameterization::boundary_matrix::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
 
@@ -402,7 +395,7 @@ mod tests {
     #[test]
     #[allow(non_snake_case)]
     fn test_harmonic_parameterization() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
         let _B = surface_parameterization::boundary_matrix::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
         let _L = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
@@ -418,7 +411,8 @@ mod tests {
         //     if surface_mesh.is_vertex_on_boundary(vertex_id) {
         //         println!("");
         //         println!("L.row({:?}): {:?}", vertex_id, L.row(index_as_usize));
-        //         println!("B.row({:?}): {:?}", vertex_id, row_data);
+        //         println!("L_sparse.row({:?}): {:?}", vertex_id, L_sparse.row(index_as_usize));
+        //         // println!("B.row({:?}): {:?}", vertex_id, row_data);
         //         println!("");
         //     } else {
         //         // println!("L.row({:?}): {:?}", vertex_id, L.row(index_as_usize).values());
@@ -428,50 +422,47 @@ mod tests {
 
     #[test]
     fn test_using_mocked_data() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(&surface_mesh);
 
         // Load B matrix
         let file_path = "mocked_data/B.csv";
-        let B = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
+        let B_dense = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
 
         // Load L matrix
-        // let file_path = "mocked_data/L_sparse.csv";
-        // let L_sparse = load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
-
-        let file_path = "mocked_data/L.csv";
-        let L: DMatrix<f64> = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
-        let L = CsrMatrix::from(&L);  // Convert to CSR matrix
+        let file_path = "mocked_data/L_sparse.csv";
+        let L_sparse = load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
 
         // Load is_constrained vector
         let file_path = "mocked_data/is_constrained.csv";
         let is_constrained = load_csv_to_bool_vec(file_path).expect("Failed to load matrix");
 
         // Solve the linear equation system
-        let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&L, &B, is_constrained);
+        // let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&L_sparse, &B_dense, is_constrained);
 
-        // Assign the result to the mesh
-        match result {
-            Ok(X) => {
-                for (vertex_id, row) in surface_mesh.vertex_iter().zip(X.row_iter()) {
-                    let tex_coord = TexCoord(row[0], row[1]);
-                    // println!("tex_coord: {:?} {:?}", row[0], row[1]);
-                    mesh_tex_coords.set_tex_coord(vertex_id, tex_coord);
-                }
-            }
-            Err(e) => {
-                println!("An error occurred: {}", e);
-            }
-        }
+        // // ????! Vlt speichern wir hier das UV mesh falsch ab, da die Punkte richtig aussehen, aber die Verbindungen nicht stimmen
+        // // Assign the result to the mesh
+        // match result {
+        //     Ok(X) => {
+        //         for (vertex_id, row) in surface_mesh.vertex_iter().zip(X.row_iter()) {
+        //             let tex_coord = TexCoord(row[0], row[1]);
+        //             // println!("tex_coord: {:?} {:?}", row[0], row[1]);
+        //             mesh_tex_coords.set_tex_coord(vertex_id, tex_coord);
+        //         }
+        //     }
+        //     Err(e) => {
+        //         println!("An error occurred: {}", e);
+        //     }
+        // }
 
-        let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
-        let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
-        io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv)
-            .expect("Failed to save mesh to file");
+        // let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
+        // let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
+        // io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv)
+        //     .expect("Failed to save mesh to file");
     }
 
     fn create_mocked_mesh_tex_coords() -> mesh_definition::MeshTexCoords {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(&surface_mesh);
 
         for vertex_id in surface_mesh.vertex_iter() {

@@ -1,6 +1,12 @@
 use std::fs::File;
 use std::io::{Write, Result};
 use std::path::PathBuf;
+use csv::ReaderBuilder;
+use std::error::Error;
+use nalgebra_sparse::{CsrMatrix, coo::CooMatrix};
+use nalgebra::DMatrix;
+use std::env;
+use nalgebra::{Point3, Vector3};
 
 use tri_mesh::Mesh;
 
@@ -8,6 +14,7 @@ use crate::mesh_definition;
 
 pub fn load_obj_mesh(path: PathBuf) -> Mesh {
     // Load the mesh from a file
+    // ! BUG: Die Reihenfolge der Vertices verändert sich beim Laden, sodass ich nicht die gemockten Daten verwenden kann
     let model: three_d_asset::Model = three_d_asset::io::load_and_deserialize(path).expect("Failed loading asset");
     let surface_mesh = Mesh::new(&model.geometries[0]);
 
@@ -45,6 +52,7 @@ pub fn save_mesh_as_obj(mesh: &tri_mesh::Mesh, file_path: PathBuf) -> Result<()>
     Ok(())
 }
 
+// ?! Maybe this function doenst work correctly
 pub fn save_uv_mesh_as_obj(mesh: &tri_mesh::Mesh, mesh_tex_coords: &mesh_definition::MeshTexCoords, file_path: PathBuf) -> Result<()> {
     let mut file = File::create(file_path)?;
 
@@ -72,3 +80,34 @@ pub fn save_uv_mesh_as_obj(mesh: &tri_mesh::Mesh, mesh_tex_coords: &mesh_definit
 
     Ok(())
 }
+
+pub fn load_test_mesh() -> Mesh {
+    let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
+    let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
+    let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
+    load_obj_mesh(new_path)
+}
+
+// pub fn load_csv_to_dmatrix(file_path: &str) -> Result<DMatrix<f64>, Box<dyn Error>> {
+//     let mut reader = ReaderBuilder::new()
+//         .has_headers(false)
+//         .from_path(file_path)
+//         .map_err(|e| e.into())?;
+
+//     let mut data = Vec::new();
+//     let mut nrows = 0;
+//     let mut ncols = 0;
+
+//     for result in reader.records() {
+//         let record = result.map_err(|e| e.into())?;
+//         nrows += 1;
+//         ncols = record.len();
+
+//         for field in record.iter() {
+//             let value: f64 = field.trim().parse().map_err(|e| e.into())?;
+//             data.push(value);
+//         }
+//     }
+
+//     Ok(DMatrix::from_row_slice(nrows, ncols, &data))
+// }
