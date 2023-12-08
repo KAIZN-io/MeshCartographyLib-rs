@@ -39,7 +39,7 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
         ];
 
         // setup local laplace matrix for the triangle
-        let laplace_matrix: DMatrix<f64> = calculate_laplacian_matrix(&triangle);
+        let laplace_matrix: DMatrix<f64> = polygon_laplace_matrix(&triangle);
 
         // ! collect the triplets
         // assemble local matrices into global matrix
@@ -72,7 +72,12 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
     L
 }
 
-fn calculate_laplacian_matrix(polygon: &[Point3<f64>]) -> DMatrix<f64> {
+fn polygon_laplace_matrix(polygon: &[Point3<f64>]) -> DMatrix<f64> {
+    // Ensure the polygon is a triangle
+    if polygon.len() != 3 {
+        panic!("polygon_laplace_matrix is designed to handle triangles only");
+    }
+
     let a = polygon[0];
     let b = polygon[1];
     let c = polygon[2];
@@ -96,55 +101,6 @@ fn cotangent_angle(v0: &Vector3<f64>, v1: &Vector3<f64>) -> f64 {
     let cross = v0.cross(v1).norm();
 
     dot / cross
-}
-
-// Helper function to compute the cross product and return its dot product with another vector
-fn dot_cross(a: &Vector3<f64>, b: &Vector3<f64>, c: &Vector3<f64>) -> f64 {
-    a.cross(b).dot(&c.cross(b))
-}
-
-// compute virtual vertex per polygon, represented by affine weights,
-// such that the resulting triangle fan minimizes the sum of squared triangle areas
-pub fn compute_virtual_vertex(poly: &DMatrix<f64>) -> DVector<f64> {
-    let n = poly.nrows();
-    let mut x = Vec::with_capacity(n);
-    let mut d = Vec::with_capacity(n);
-
-    // Setup array of positions and edges
-    for i in 0..n {
-        x.push(Vector3::new(poly[(i, 0)], poly[(i, 1)], poly[(i, 2)]));
-    }
-    for i in 0..n {
-        d.push(x[(i + 1) % n] - x[i]);
-    }
-
-    // Setup matrix A and rhs b
-    let mut A = DMatrix::zeros(n + 1, n);
-    let mut b = DVector::zeros(n + 1);
-    for j in 0..n {
-        for i in j..n {
-            let mut Aij = 0.0;
-            let mut bi = 0.0;
-            for k in 0..n {
-                Aij += dot_cross(&x[j], &d[k], &x[i]);
-                bi += dot_cross(&x[i], &d[k], &x[k]);
-            }
-            A[(i, j)] = Aij;
-            A[(j, i)] = Aij; // Symmetric entry
-            b[i] = bi;
-        }
-    }
-    for j in 0..n {
-        A[(n, j)] = 1.0;
-    }
-    b[n] = 1.0;
-
-    // Solving the linear system
-    let svd = A.svd(true, true);
-    let solution = svd.solve(&b, 1e-6).expect("SVD solve failed");
-
-    // Extracting the top 'n' rows of the solution
-    solution.rows(0, n).into()
 }
 
 fn normalize_matrix(matrix: &mut CsrMatrix<f64>) {
@@ -187,6 +143,37 @@ mod tests {
         io::load_obj_mesh(new_path)
     }
 
+    fn load_sparse_csv_data_to_csr_matrix(file_path: &str) -> Result<CsrMatrix<f64>, Box<dyn Error>> {
+        let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
+
+        let mut row_indices = Vec::new();
+        let mut col_indices = Vec::new();
+        let mut values = Vec::new();
+        let mut max_row_index = 0;
+        let mut max_col_index = 0;
+
+        for result in reader.records() {
+            let record = result?;
+            let row_index: usize = record[0].trim().parse()?;
+            let col_index: usize = record[1].trim().parse()?;
+            let value: f64 = record[2].trim().parse()?;
+
+            row_indices.push(row_index - 1); // Assuming 1-based indices in CSV
+            col_indices.push(col_index - 1);
+            values.push(value);
+
+            max_row_index = max_row_index.max(row_index);
+            max_col_index = max_col_index.max(col_index);
+        }
+
+        // Use try_from_triplets with matrix dimensions
+        // A COO Sparse matrix stores entries in coordinate-form, that is triplets (i, j, v), where i and j correspond to row and column indices of the entry, and v to the value of the entry
+        let coo_matrix = CooMatrix::try_from_triplets(max_row_index, max_col_index, row_indices, col_indices, values)?;
+
+        // Convert the CooMatrix to a CsrMatrix
+        Ok(CsrMatrix::from(&coo_matrix))
+    }
+
     fn load_csv_to_dmatrix(file_path: &str) -> Result<DMatrix<f64>, Box<dyn Error>> {
         let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
 
@@ -209,46 +196,6 @@ mod tests {
     }
 
     #[test]
-    fn test_dot_cross() {
-        let v1 = Vector3::new(1.0, 0.0, 0.0);
-        let v2 = Vector3::new(0.0, 1.0, 0.0);
-        let v3 = Vector3::new(0.0, 0.0, 1.0);
-
-        let result = dot_cross(&v1, &v2, &v3);
-        assert_eq!(result, 0.0);
-    }
-
-    #[test]
-    fn test_dot_cross_different_vectors() {
-        let v4 = Vector3::new(1.0, 2.0, 3.0);
-        let v5 = Vector3::new(-1.0, 0.5, 2.0);
-        let v1 = Vector3::new(1.0, 0.0, 0.0);
-
-        let result = dot_cross(&v4, &v5, &v1);
-        assert_eq!(result, 11.25);
-    }
-
-    #[test]
-    fn test_dot_cross_orthogonal_vectors() {
-        let v6 = Vector3::new(0.0, 1.0, -1.0);
-        let v7 = Vector3::new(1.0, 1.0, 1.0);
-        let v1 = Vector3::new(1.0, 0.0, 0.0);
-
-        let result = dot_cross(&v6, &v7, &v1);
-        assert_eq!(result, 0.0);
-    }
-
-    #[test]
-    fn test_dot_cross_parallel_vectors() {
-        let v8 = Vector3::new(1.0, 2.0, 3.0);
-        let v9 = Vector3::new(2.0, 4.0, 6.0);
-        let v1 = Vector3::new(1.0, 0.0, 0.0);
-
-        let result = dot_cross(&v8, &v9, &v1);
-        assert_eq!(result, 0.0);
-    }
-
-    #[test]
     fn test_cotangent_angle() {
         let v0 = Vector3::new(1.0, 0.0, 0.0);
         let v1 = Vector3::new(0.0, 1.0, 0.0);
@@ -258,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_laplacian_matrix() {
+    fn test_polygon_laplace_matrix() {
         // Define a simple equilateral triangle
         let triangle = [
             Point3::new(0.0, 0.0, 0.0),
@@ -266,7 +213,7 @@ mod tests {
             Point3::new(0.5, 0.86602540378, 0.0), // sin(60 degrees) = ~0.866
         ];
 
-        let laplace_matrix = calculate_laplacian_matrix(&triangle);
+        let laplace_matrix = polygon_laplace_matrix(&triangle);
         // Check if the matrix has the expected properties, e.g., symmetry, non-zero values at certain positions, etc.
         // As an example, checking symmetry:
         assert_eq!(laplace_matrix[(0, 1)], laplace_matrix[(1, 0)]);
@@ -293,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_laplacian_matrix_values() {
+    fn test_polygon_laplace_matrix_values() {
         // Define a simple right-angle triangle
         let triangle = [
             Point3::new(0.0, 0.0, 0.0),
@@ -301,7 +248,7 @@ mod tests {
             Point3::new(0.0, 1.0, 0.0),
         ];
 
-        let laplace_matrix = calculate_laplacian_matrix(&triangle);
+        let laplace_matrix = polygon_laplace_matrix(&triangle);
 
         assert_eq!(laplace_matrix[(0, 1)], 1.0);
         assert_eq!(laplace_matrix[(1, 0)], 1.0);
@@ -313,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_laplacian_matrix_isosceles_triangle() {
+    fn test_polygon_laplace_matrix_isosceles_triangle() {
         // Define an isosceles triangle
         let triangle = [
             Point3::new(0.0, 0.0, 0.0),
@@ -321,7 +268,7 @@ mod tests {
             Point3::new(1.0, 1.0, 0.0),
         ];
 
-        let laplace_matrix = calculate_laplacian_matrix(&triangle);
+        let laplace_matrix = polygon_laplace_matrix(&triangle);
 
         assert_eq!(laplace_matrix[(0, 0)], 0.0);
         assert_eq!(laplace_matrix[(0, 1)], 0.0);
@@ -395,11 +342,10 @@ mod tests {
         let surface_mesh: Mesh = load_test_mesh();
         let laplace_matrix: CsrMatrix<f64> = build_laplace_matrix(&surface_mesh, true);
 
-        let file_path = "mocked_data/L.csv";
-        let L_dense: DMatrix<f64> = load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
-        let L_sparse = CsrMatrix::from(&L_dense);  // Convert to CSR Sparse matrix
+        let file_path = "mocked_data/L_sparse.csv";
+        let L_sparse = load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
 
         // Count the number of explicitly stored entries in the matrix
-        // assert_eq!(laplace_matrix.nnz(), L_sparse.nnz());
+        assert_eq!(laplace_matrix.nnz(), L_sparse.nnz());
     }
 }
