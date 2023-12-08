@@ -43,56 +43,6 @@ struct TriMesh {
     indices: Vec<u32>,
 }
 
-// Function to create TriMesh from obj::ObjSet
-// fn create_tri_mesh(obj_set: obj::ObjSet) -> Result<TriMesh, String> {
-//     let mut positions = Vec::new();
-//     let mut normals = Vec::new();
-//     let mut uvs = Vec::new();
-//     let mut indices = Vec::new();
-//     let mut index_map = HashMap::new();
-//     let mut current_index = 0;
-
-//     for object in obj_set.objects {
-//         for geometry in object.geometry {
-//             for shape in geometry.shapes {
-//                 match shape.primitive {
-//                     Primitive::Triangle(v1, v2, v3) => {
-//                         for &index in &[v1, v2, v3] {
-//                             if let Some(&mapped_index) = index_map.get(&index) {
-//                                 indices.push(mapped_index);
-//                             } else {
-//                                 let vertex = object.vertices[index.0];
-//                                 positions.push(Vector3 { x: vertex.x, y: vertex.y, z: vertex.z });
-
-//                                 if let Some(uv_index) = index.1 {
-//                                     let uv = object.tex_vertices[uv_index];
-//                                     uvs.push(Vector2 { u: uv.u, v: uv.v });
-//                                 }
-
-//                                 if let Some(normal_index) = index.2 {
-//                                     let normal = object.normals[normal_index];
-//                                     normals.push(Vector3 { x: normal.x, y: normal.y, z: normal.z });
-//                                 }
-
-//                                 index_map.insert(index, current_index);
-//                                 indices.push(current_index);
-//                                 current_index += 1;
-//                             }
-//                         }
-//                     }
-//                     _ => return Err("Unsupported primitive type".to_string()),
-//                 }
-//             }
-//         }
-//     }
-
-//     Ok(TriMesh {
-//         positions,
-//         normals: if normals.is_empty() { None } else { Some(normals) },
-//         uvs: if uvs.is_empty() { None } else { Some(uvs) },
-//         indices,
-//     })
-// }
 fn create_tri_mesh(obj_set: obj::ObjSet) -> Result<TriMesh, String> {
     let mut positions = Vec::new();
     let mut indices = Vec::new();
@@ -127,6 +77,30 @@ fn create_tri_mesh(obj_set: obj::ObjSet) -> Result<TriMesh, String> {
     })
 }
 
+use three_d_asset::{Positions, TriMesh as ThreeDTriMesh};
+use tri_mesh::*;
+
+fn convert_to_tri_mesh_mesh(tri_mesh: TriMesh) -> Result<Mesh, String> {
+    // Convert positions to the format expected by three_d_asset::TriMesh
+    let positions = Positions::F64(tri_mesh.positions.iter().map(|v| {
+        vec3(v.x, v.y, v.z) // Assuming vec3 is from three_d_asset or a similar crate
+    }).collect());
+
+    // Convert indices to the format expected by three_d_asset::TriMesh
+    let indices = three_d_asset::Indices::U32(tri_mesh.indices);
+
+    // Create the three_d_asset::TriMesh
+    let three_d_tri_mesh = ThreeDTriMesh {
+        positions,
+        indices,
+        ..Default::default() // Add normals, uvs, etc., if available
+    };
+
+    // Create the tri_mesh::Mesh
+    let mesh = Mesh::new(&three_d_tri_mesh);
+    Ok(mesh)
+}
+
 fn get_mesh_cartography_lib_dir() -> PathBuf {
     PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
 }
@@ -144,12 +118,9 @@ pub fn create_uv_surface() {
     // Load the mesh
     let test_mesh = io::load_mesh_from_obj(mesh_path.clone());
     let test_surface_mesh = create_tri_mesh(test_mesh.clone().unwrap()).unwrap();
+    let surface_mesh = convert_to_tri_mesh_mesh(test_surface_mesh).unwrap();
 
-    println!("get the first vertex position: {:?}", test_surface_mesh.positions[0]);
-    println!("last vertex position: {:?}", test_surface_mesh.positions[test_surface_mesh.positions.len() - 1]);
-
-
-    let surface_mesh = io::load_obj_mesh(mesh_path);
+    // let surface_mesh = io::load_obj_mesh(mesh_path);
     io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
     let (_boundary_vertices, mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
