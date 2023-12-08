@@ -17,6 +17,7 @@ use nalgebra_sparse::{CooMatrix, CsrMatrix};
 
 extern crate tri_mesh;
 use tri_mesh::Mesh;
+use crate::io;
 
 
 /// Get the Laplace matrix of a Surface Mesh.
@@ -136,65 +137,6 @@ mod tests {
     use csv::ReaderBuilder;
     use std::error::Error;
 
-    fn load_test_mesh() -> Mesh {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-        io::load_obj_mesh(new_path)
-    }
-
-    fn load_sparse_csv_data_to_csr_matrix(file_path: &str) -> Result<CsrMatrix<f64>, Box<dyn Error>> {
-        let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
-
-        let mut row_indices = Vec::new();
-        let mut col_indices = Vec::new();
-        let mut values = Vec::new();
-        let mut max_row_index = 0;
-        let mut max_col_index = 0;
-
-        for result in reader.records() {
-            let record = result?;
-            let row_index: usize = record[0].trim().parse()?;
-            let col_index: usize = record[1].trim().parse()?;
-            let value: f64 = record[2].trim().parse()?;
-
-            row_indices.push(row_index - 1); // Assuming 1-based indices in CSV
-            col_indices.push(col_index - 1);
-            values.push(value);
-
-            max_row_index = max_row_index.max(row_index);
-            max_col_index = max_col_index.max(col_index);
-        }
-
-        // Use try_from_triplets with matrix dimensions
-        // A COO Sparse matrix stores entries in coordinate-form, that is triplets (i, j, v), where i and j correspond to row and column indices of the entry, and v to the value of the entry
-        let coo_matrix = CooMatrix::try_from_triplets(max_row_index, max_col_index, row_indices, col_indices, values)?;
-
-        // Convert the CooMatrix to a CsrMatrix
-        Ok(CsrMatrix::from(&coo_matrix))
-    }
-
-    fn load_csv_to_dmatrix(file_path: &str) -> Result<DMatrix<f64>, Box<dyn Error>> {
-        let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
-
-        let mut data = Vec::new();
-        let mut nrows = 0;
-        let mut ncols = 0;
-
-        for result in reader.records() {
-            let record = result?;
-            nrows += 1;
-            ncols = record.len();
-
-            for field in record.iter() {
-                let value: f64 = field.trim().parse()?;
-                data.push(value);
-            }
-        }
-
-        Ok(DMatrix::from_row_slice(nrows, ncols, &data))
-    }
-
     #[test]
     fn test_cotangent_angle() {
         let v0 = Vector3::new(1.0, 0.0, 0.0);
@@ -283,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_diagonal_elements() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         for (i, j, value) in laplace_matrix.triplet_iter() {
@@ -297,7 +239,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_number_nonzero_elements() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         assert_eq!(laplace_matrix.nnz(), 32845)
@@ -305,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_format() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         // Verify dimensions
@@ -316,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_symmetry() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         assert_eq!(laplace_matrix, laplace_matrix.transpose());
@@ -324,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_row_sum() {
-        let surface_mesh = load_test_mesh();
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, false);
 
         let mut row_sums = vec![0.0; laplace_matrix.nrows()];
@@ -339,11 +281,11 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix() {
-        let surface_mesh: Mesh = load_test_mesh();
+        let surface_mesh: Mesh = io::load_test_mesh();
         let laplace_matrix: CsrMatrix<f64> = build_laplace_matrix(&surface_mesh, true);
 
         let file_path = "mocked_data/L_sparse.csv";
-        let L_sparse = load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
+        let L_sparse = io::load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
 
         // Count the number of explicitly stored entries in the matrix
         assert_eq!(laplace_matrix.nnz(), L_sparse.nnz());

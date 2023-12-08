@@ -88,26 +88,69 @@ pub fn load_test_mesh() -> Mesh {
     load_obj_mesh(new_path)
 }
 
-// pub fn load_csv_to_dmatrix(file_path: &str) -> Result<DMatrix<f64>, Box<dyn Error>> {
-//     let mut reader = ReaderBuilder::new()
-//         .has_headers(false)
-//         .from_path(file_path)
-//         .map_err(|e| e.into())?;
+pub fn load_sparse_csv_data_to_csr_matrix(file_path: &str) -> std::result::Result<CsrMatrix<f64>, Box<dyn Error>> {
+    let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
 
-//     let mut data = Vec::new();
-//     let mut nrows = 0;
-//     let mut ncols = 0;
+    let mut row_indices = Vec::new();
+    let mut col_indices = Vec::new();
+    let mut values = Vec::new();
+    let mut max_row_index = 0;
+    let mut max_col_index = 0;
 
-//     for result in reader.records() {
-//         let record = result.map_err(|e| e.into())?;
-//         nrows += 1;
-//         ncols = record.len();
+    for result in reader.records() {
+        let record = result?;
+        let row_index: usize = record[0].trim().parse()?;
+        let col_index: usize = record[1].trim().parse()?;
+        let value: f64 = record[2].trim().parse()?;
 
-//         for field in record.iter() {
-//             let value: f64 = field.trim().parse().map_err(|e| e.into())?;
-//             data.push(value);
-//         }
-//     }
+        row_indices.push(row_index - 1); // Assuming 1-based indices in CSV
+        col_indices.push(col_index - 1);
+        values.push(value);
 
-//     Ok(DMatrix::from_row_slice(nrows, ncols, &data))
-// }
+        max_row_index = max_row_index.max(row_index);
+        max_col_index = max_col_index.max(col_index);
+    }
+
+    // Use try_from_triplets with matrix dimensions
+    // A COO Sparse matrix stores entries in coordinate-form, that is triplets (i, j, v), where i and j correspond to row and column indices of the entry, and v to the value of the entry
+    let coo_matrix = CooMatrix::try_from_triplets(max_row_index, max_col_index, row_indices, col_indices, values)?;
+
+    // Convert the CooMatrix to a CsrMatrix
+    Ok(CsrMatrix::from(&coo_matrix))
+}
+
+pub fn load_csv_to_dmatrix(file_path: &str) -> std::result::Result<DMatrix<f64>, Box<dyn Error>> {
+    let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
+
+    let mut data = Vec::new();
+    let mut nrows = 0;
+    let mut ncols = 0;
+
+    for result in reader.records() {
+        let record = result?;
+        nrows += 1;
+        ncols = record.len();
+
+        for field in record.iter() {
+            let value: f64 = field.trim().parse()?;
+            data.push(value);
+        }
+    }
+
+    Ok(DMatrix::from_row_slice(nrows, ncols, &data))
+}
+
+pub fn load_csv_to_bool_vec(file_path: &str) -> std::result::Result<Vec<bool>, Box<dyn Error>> {
+    let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
+
+    let mut bools = Vec::new();
+    for result in reader.records() {
+        let record = result?;
+        if let Some(field) = record.get(0) {
+            let value: u8 = field.trim().parse()?;
+            bools.push(value != 0);
+        }
+    }
+
+    Ok(bools)
+}
