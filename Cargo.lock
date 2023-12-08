@@ -452,6 +452,7 @@ dependencies = [
  "tri-mesh",
  "wasm-bindgen",
  "wasm-bindgen-test",
+ "wavefront_obj",
 ]
 
 [[package]]
