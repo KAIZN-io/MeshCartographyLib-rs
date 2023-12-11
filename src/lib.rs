@@ -16,6 +16,8 @@ use wasm_bindgen::prelude::*;
 use std::env;
 use std::path::PathBuf;
 use tri_mesh::{Mesh, VertexID};
+use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
 
 mod mesh_definition;
 use crate::mesh_definition::TexCoord;
@@ -30,6 +32,21 @@ mod surface_parameterization {
     pub mod harmonic_parameterization_helper;
 }
 
+#[derive(Debug, Clone, PartialEq)]
+struct VertexPosition(f64, f64, f64);
+
+impl Eq for VertexPosition {}
+
+impl Hash for VertexPosition {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let x = (self.0 * 1e6 as f64) as i64;
+        let y = (self.1 * 1e6 as f64) as i64;
+        let z = (self.2 * 1e6 as f64) as i64;
+        x.hash(state);
+        y.hash(state);
+        z.hash(state);
+    }
+}
 
 fn get_mesh_cartography_lib_dir() -> PathBuf {
     PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
@@ -55,16 +72,15 @@ pub fn create_uv_surface() {
         .expect("Failed to save mesh to file");
 }
 
-
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
     let (boundary_edges, length) = get_boundary_edges(surface_mesh);
 
     let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();  // Collect edges in a Vec to maintain order
-    let boundary_vertices = get_boundary_vertices(&edge_list);
+    let mut boundary_vertices = get_boundary_vertices(&edge_list);
+    sort_boundary_vertices(&mut boundary_vertices, &surface_mesh);
 
     let mut mesh_tex_coords = init_mesh_tex_coords(surface_mesh, &boundary_vertices, length);
-    // Parameterize the mesh
-    surface_parameterization::harmonic_parameterization_helper::harmonic_parameterization(surface_mesh, &mut mesh_tex_coords, true);
+    surface_parameterization::harmonic_parameterization_helper::harmonic_parameterization(surface_mesh, &mut mesh_tex_coords, true);  // Parameterize the mesh
 
     (boundary_vertices, mesh_tex_coords)
 }
@@ -133,6 +149,34 @@ fn get_boundary_vertices(edge_list: &[(VertexID, VertexID)]) -> Vec<VertexID> {
     boundary_vertices
 }
 
+fn sort_boundary_vertices(boundary_vertices: &mut Vec<VertexID>, surface_mesh: &Mesh) -> Vec<VertexID> {
+    let mut position_map = HashMap::new();
+    let mut unique_vertex_ids = Vec::new();
+
+    for vertex_id in &*boundary_vertices {
+        let position = surface_mesh.vertex_position(*vertex_id);
+        let vertex_position = VertexPosition(position.x, position.y, position.z);
+
+        match position_map.get(&vertex_position) {
+            Some(&existing_vertex_id) if existing_vertex_id != *vertex_id => {
+                unique_vertex_ids.retain(|&id| id != existing_vertex_id);
+            },
+            None => {
+                position_map.insert(vertex_position, *vertex_id);
+                unique_vertex_ids.push(*vertex_id);
+            },
+            _ => {}
+        }
+    }
+
+    if let Some(first_unique_vertex_id) = unique_vertex_ids.first() {
+        if let Some(index) = boundary_vertices.iter().position(|&id| id == *first_unique_vertex_id) {
+            boundary_vertices.rotate_left(index);
+        }
+    }
+
+    unique_vertex_ids
+}
 
 
 #[wasm_bindgen]
@@ -152,23 +196,6 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::iter::zip;
-    use std::hash::{Hash, Hasher};
-
-    #[derive(Debug, Clone, PartialEq)]
-    struct VertexPosition(f64, f64, f64);
-
-    impl Eq for VertexPosition {}
-
-    impl Hash for VertexPosition {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            let x = (self.0 * 1e6 as f64) as i64;
-            let y = (self.1 * 1e6 as f64) as i64;
-            let z = (self.2 * 1e6 as f64) as i64;
-            x.hash(state);
-            y.hash(state);
-            z.hash(state);
-        }
-    }
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
@@ -246,30 +273,7 @@ mod tests {
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
         let mut boundary_vertices = get_boundary_vertices(&edge_list);
 
-        let mut position_map = HashMap::new();
-        let mut unique_vertex_ids = Vec::new();
-
-        for vertex_id in &boundary_vertices {
-            let position = surface_mesh.vertex_position(*vertex_id);
-            let vertex_position = VertexPosition(position.x, position.y, position.z);
-
-            match position_map.get(&vertex_position) {
-                Some(&existing_vertex_id) if existing_vertex_id != *vertex_id => {
-                    unique_vertex_ids.retain(|&id| id != existing_vertex_id);
-                },
-                None => {
-                    position_map.insert(vertex_position, *vertex_id);
-                    unique_vertex_ids.push(*vertex_id);
-                },
-                _ => {}
-            }
-        }
-
-        if let Some(first_unique_vertex_id) = unique_vertex_ids.first() {
-            if let Some(index) = boundary_vertices.iter().position(|&id| id == *first_unique_vertex_id) {
-                boundary_vertices.rotate_left(index);
-            }
-        }
+        let unique_vertex_ids = sort_boundary_vertices(&mut boundary_vertices, &surface_mesh);
 
         // Convert unique_vertex_ids to a Vec of integers
         let mut usize_values = Vec::new();
