@@ -76,8 +76,7 @@ fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definitio
     let (boundary_edges, length) = get_boundary_edges(surface_mesh);
 
     let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();  // Collect edges in a Vec to maintain order
-    let mut boundary_vertices = get_boundary_vertices(&edge_list);
-    sort_boundary_vertices(&mut boundary_vertices, &surface_mesh);
+    let (boundary_vertices, _) = get_boundary_vertices(&edge_list, &surface_mesh);
 
     let mut mesh_tex_coords = init_mesh_tex_coords(surface_mesh, &boundary_vertices, length);
     surface_parameterization::harmonic_parameterization_helper::harmonic_parameterization(surface_mesh, &mut mesh_tex_coords, true);  // Parameterize the mesh
@@ -119,9 +118,9 @@ fn get_boundary_edges(surface_mesh: &Mesh) -> (Vec<(VertexID, VertexID)>, f64) {
     (boundary_edges, length)
 }
 
-fn get_boundary_vertices(edge_list: &[(VertexID, VertexID)]) -> Vec<VertexID> {
+fn get_boundary_vertices(edge_list: &[(VertexID, VertexID)], surface_mesh: &Mesh) -> (Vec<VertexID>, Vec<VertexID>) {
     if edge_list.is_empty() {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     }
 
     let mut boundary_vertices = Vec::new();
@@ -146,7 +145,9 @@ fn get_boundary_vertices(edge_list: &[(VertexID, VertexID)]) -> Vec<VertexID> {
 
     assert_eq!(boundary_vertices.len(), 112); // Ensure boundary vertices count matches expected number
 
-    boundary_vertices
+    let unique_vertex_ids = sort_boundary_vertices(&mut boundary_vertices, &surface_mesh);
+
+    (boundary_vertices, unique_vertex_ids)
 }
 
 fn sort_boundary_vertices(boundary_vertices: &mut Vec<VertexID>, surface_mesh: &Mesh) -> Vec<VertexID> {
@@ -245,7 +246,7 @@ mod tests {
         let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
-        let mut boundary_vertices = get_boundary_vertices(&edge_list);
+        let (mut boundary_vertices, _) = get_boundary_vertices(&edge_list, &surface_mesh);
 
         assert!(!surface_mesh.is_closed(), "Mesh is not open");
 
@@ -271,9 +272,7 @@ mod tests {
         let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
-        let mut boundary_vertices = get_boundary_vertices(&edge_list);
-
-        let unique_vertex_ids = sort_boundary_vertices(&mut boundary_vertices, &surface_mesh);
+        let (_, unique_vertex_ids) = get_boundary_vertices(&edge_list, &surface_mesh);
 
         // Convert unique_vertex_ids to a Vec of integers
         let mut usize_values = Vec::new();
@@ -294,7 +293,7 @@ mod tests {
         let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
-        let boundary_vertices = get_boundary_vertices(&edge_list);
+        let (boundary_vertices, _) = get_boundary_vertices(&edge_list, &surface_mesh);
 
         let vertex_degree = count_open_mesh_degree(&surface_mesh, &boundary_vertices);
         let L = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
@@ -330,7 +329,7 @@ mod tests {
         let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
-        let boundary_vertices = get_boundary_vertices(&edge_list);
+        let (boundary_vertices, _) = get_boundary_vertices(&edge_list, &surface_mesh);
 
         assert_eq!(boundary_vertices.len(), 112);
 
@@ -345,7 +344,7 @@ mod tests {
         let surface_mesh = io::load_test_mesh();
         let (boundary_edges, length) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
-        let boundary_vertices = get_boundary_vertices(&edge_list);
+        let (boundary_vertices, _) = get_boundary_vertices(&edge_list, &surface_mesh);
 
         let corner_count = 4;
         let side_length = length / corner_count as f64;
