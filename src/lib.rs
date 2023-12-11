@@ -152,6 +152,23 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::iter::zip;
+    use std::hash::{Hash, Hasher};
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct VertexPosition(f64, f64, f64);
+
+    impl Eq for VertexPosition {}
+
+    impl Hash for VertexPosition {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            let x = (self.0 * 1e6 as f64) as i64;
+            let y = (self.1 * 1e6 as f64) as i64;
+            let z = (self.2 * 1e6 as f64) as i64;
+            x.hash(state);
+            y.hash(state);
+            z.hash(state);
+        }
+    }
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
@@ -220,6 +237,51 @@ mod tests {
             assert_eq!(vertex_degree.get(&vertex_id), Some(expected));
             // println!("{:?}, {:?}", vertex_degree.get(&vertex_id), expected);
         }
+    }
+
+    #[test]
+    fn test_get_cutline_ends() {
+        let surface_mesh = io::load_test_mesh();
+        let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
+        let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
+        let mut boundary_vertices = get_boundary_vertices(&edge_list);
+
+        let mut position_map = HashMap::new();
+        let mut unique_vertex_ids = Vec::new();
+
+        for vertex_id in &boundary_vertices {
+            let position = surface_mesh.vertex_position(*vertex_id);
+            let vertex_position = VertexPosition(position.x, position.y, position.z);
+
+            match position_map.get(&vertex_position) {
+                Some(&existing_vertex_id) if existing_vertex_id != *vertex_id => {
+                    unique_vertex_ids.retain(|&id| id != existing_vertex_id);
+                },
+                None => {
+                    position_map.insert(vertex_position, *vertex_id);
+                    unique_vertex_ids.push(*vertex_id);
+                },
+                _ => {}
+            }
+        }
+
+        if let Some(first_unique_vertex_id) = unique_vertex_ids.first() {
+            if let Some(index) = boundary_vertices.iter().position(|&id| id == *first_unique_vertex_id) {
+                boundary_vertices.rotate_left(index);
+            }
+        }
+
+        // Convert unique_vertex_ids to a Vec of integers
+        let mut usize_values = Vec::new();
+
+        for vertex_id in &unique_vertex_ids {
+            let index_as_u32: u32 = **vertex_id;
+            let index_as_usize: usize = index_as_u32 as usize;
+            usize_values.push(index_as_usize);
+        }
+
+        assert_eq!(usize_values[0], 4466);
+        assert_eq!(usize_values[1], 1897);
     }
 
     #[test]
