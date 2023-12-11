@@ -46,7 +46,7 @@ cmake_install.cmake
 *_uv*.off
 *_open*.off
 
-*.csv
-
 vscode.yaml
 /target
+
+*_uv.obj

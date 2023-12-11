@@ -8,8 +8,8 @@
 //!
 //! ## Current Status
 //!
-//! - **Bugs:** None known at this time.
-//! - **Todo:** Further development tasks to be determined.
+//! - **Bugs:** -
+//! - **Todo:** -
 
 use nalgebra::DMatrix;
 use nalgebra::{Point3, Vector3};
@@ -17,7 +17,6 @@ use nalgebra_sparse::{CooMatrix, CsrMatrix};
 
 extern crate tri_mesh;
 use tri_mesh::Mesh;
-
 
 /// Get the Laplace matrix of a Surface Mesh.
 #[allow(non_snake_case)]
@@ -28,20 +27,21 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
     for face in mesh.face_iter() {
         let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
 
-        // Use each vertex individually instead of iterating over a tuple
+        // collect polygon vertices
         let vertices = [vertex1, vertex2, vertex3];
 
-        // Create an array of Point3<f64> for the triangle
+        // collect their positions
         let triangle = [
             Point3::new(mesh.vertex_position(vertex1).x, mesh.vertex_position(vertex1).y, mesh.vertex_position(vertex1).z),
             Point3::new(mesh.vertex_position(vertex2).x, mesh.vertex_position(vertex2).y, mesh.vertex_position(vertex2).z),
             Point3::new(mesh.vertex_position(vertex3).x, mesh.vertex_position(vertex3).y, mesh.vertex_position(vertex3).z),
         ];
 
-        // Compute local Laplace matrix for the triangle
-        let laplace_matrix = calculate_laplacian_matrix(&triangle);
+        // setup local laplace matrix for the triangle
+        let laplace_matrix: DMatrix<f64> = polygon_laplace_matrix(&triangle);
 
-        // Assemble local matrices into global matrix
+        // ! collect the triplets
+        // assemble local matrices into global matrix
         for (j, &vertex_j) in vertices.iter().enumerate() {
             for (k, &vertex_k) in vertices.iter().enumerate() {
                 let index_as_u32: u32 = *vertex_j;
@@ -71,7 +71,12 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
     L
 }
 
-fn calculate_laplacian_matrix(polygon: &[Point3<f64>]) -> DMatrix<f64> {
+fn polygon_laplace_matrix(polygon: &[Point3<f64>]) -> DMatrix<f64> {
+    // Ensure the polygon is a triangle
+    if polygon.len() != 3 {
+        panic!("polygon_laplace_matrix is designed to handle triangles only");
+    }
+
     let a = polygon[0];
     let b = polygon[1];
     let c = polygon[2];
@@ -103,9 +108,8 @@ fn cotangent_angle(v0: &Vector3<f64>, v1: &Vector3<f64>) -> f64 {
 mod tests {
     use super::*;
     use nalgebra::{Point3, Vector3};
-    use std::env;
-    use std::path::PathBuf;
     use crate::io;
+    use nalgebra_sparse::CsrMatrix;
 
     #[test]
     fn test_cotangent_angle() {
@@ -117,7 +121,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_laplacian_matrix() {
+    fn test_polygon_laplace_matrix() {
         // Define a simple equilateral triangle
         let triangle = [
             Point3::new(0.0, 0.0, 0.0),
@@ -125,7 +129,7 @@ mod tests {
             Point3::new(0.5, 0.86602540378, 0.0), // sin(60 degrees) = ~0.866
         ];
 
-        let laplace_matrix = calculate_laplacian_matrix(&triangle);
+        let laplace_matrix = polygon_laplace_matrix(&triangle);
         // Check if the matrix has the expected properties, e.g., symmetry, non-zero values at certain positions, etc.
         // As an example, checking symmetry:
         assert_eq!(laplace_matrix[(0, 1)], laplace_matrix[(1, 0)]);
@@ -152,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_laplacian_matrix_values() {
+    fn test_polygon_laplace_matrix_values() {
         // Define a simple right-angle triangle
         let triangle = [
             Point3::new(0.0, 0.0, 0.0),
@@ -160,7 +164,7 @@ mod tests {
             Point3::new(0.0, 1.0, 0.0),
         ];
 
-        let laplace_matrix = calculate_laplacian_matrix(&triangle);
+        let laplace_matrix = polygon_laplace_matrix(&triangle);
 
         assert_eq!(laplace_matrix[(0, 1)], 1.0);
         assert_eq!(laplace_matrix[(1, 0)], 1.0);
@@ -172,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_laplacian_matrix_isosceles_triangle() {
+    fn test_polygon_laplace_matrix_isosceles_triangle() {
         // Define an isosceles triangle
         let triangle = [
             Point3::new(0.0, 0.0, 0.0),
@@ -180,7 +184,7 @@ mod tests {
             Point3::new(1.0, 1.0, 0.0),
         ];
 
-        let laplace_matrix = calculate_laplacian_matrix(&triangle);
+        let laplace_matrix = polygon_laplace_matrix(&triangle);
 
         assert_eq!(laplace_matrix[(0, 0)], 0.0);
         assert_eq!(laplace_matrix[(0, 1)], 0.0);
@@ -195,11 +199,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_diagonal_elements() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         for (i, j, value) in laplace_matrix.triplet_iter() {
@@ -213,11 +213,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_number_nonzero_elements() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         assert_eq!(laplace_matrix.nnz(), 32845)
@@ -225,11 +221,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_format() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         // Verify dimensions
@@ -240,11 +232,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_symmetry() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, true);
 
         assert_eq!(laplace_matrix, laplace_matrix.transpose());
@@ -252,11 +240,7 @@ mod tests {
 
     #[test]
     fn test_laplace_matrix_row_sum() {
-        let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
-        let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
-        let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-
-        let surface_mesh = io::load_obj_mesh(new_path);
+        let surface_mesh = io::load_test_mesh();
         let laplace_matrix = build_laplace_matrix(&surface_mesh, false);
 
         let mut row_sums = vec![0.0; laplace_matrix.nrows()];
@@ -267,5 +251,17 @@ mod tests {
         for row_sum in row_sums {
             assert!(row_sum.abs() < 1e-6);
         }
+    }
+
+    #[test]
+    fn test_laplace_matrix() {
+        let surface_mesh: Mesh = io::load_test_mesh();
+        let laplace_matrix: CsrMatrix<f64> = build_laplace_matrix(&surface_mesh, true);
+
+        let file_path = "data/test/L_sparse.csv";
+        let L_sparse = io::load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
+
+        // Count the number of explicitly stored entries in the matrix
+        assert_eq!(laplace_matrix.nnz(), L_sparse.nnz());
     }
 }

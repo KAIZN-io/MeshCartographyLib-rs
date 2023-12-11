@@ -8,8 +8,8 @@
 //!
 //! ## Current Status
 //!
-//! - **Bugs:** None known at this time.
-//! - **Todo:** Further development tasks to be determined.
+//! - **Bugs:** -
+//! - **Todo:** -
 
 extern crate new_king_lib;
 
