@@ -1,3 +1,16 @@
+//! # Create a square border
+//!
+//! ## Metadata
+//!
+//! - **Author:** Jan-Piotraschke
+//! - **Date:** 2023-Dec-11
+//! - **License:** [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+//!
+//! ## Current Status
+//!
+//! - **Bugs:** -
+//! - **Todo:** -
+
 use crate::mesh_definition::TexCoord;
 
 pub fn distribute_vertices_around_square(boundary_vertices: &[tri_mesh::VertexID], side_length: f64, tolerance: f64, total_length: f64) -> Vec<TexCoord> {

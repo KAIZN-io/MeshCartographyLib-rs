@@ -1,3 +1,16 @@
+//! # Input/Output
+//!
+//! ## Metadata
+//!
+//! - **Author:** Jan-Piotraschke
+//! - **Date:** 2023-Dec-11
+//! - **License:** [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+//!
+//! ## Current Status
+//!
+//! - **Bugs:** -
+//! - **Todo:** -
+
 use std::fs::File;
 use std::io::{Write, Result};
 use std::path::PathBuf;
@@ -6,27 +19,19 @@ use std::error::Error;
 use nalgebra_sparse::{CsrMatrix, coo::CooMatrix};
 use nalgebra::DMatrix;
 use std::env;
-use nalgebra::{Point3, Vector3};
 use std::io::Read;
 
-use tri_mesh::Mesh;
-
-use crate::mesh_definition;
-
-use std::io::BufReader;
 use wavefront_obj::obj::{self, Primitive};
 use three_d_asset::{Positions, TriMesh as ThreeDTriMesh};
 use tri_mesh::*;
+use tri_mesh::Mesh;
+
+use crate::mesh_definition;
 
 pub struct Vector3Custom {
     x: f64,
     y: f64,
     z: f64,
-}
-
-pub struct Vector2 {
-    u: f64,
-    v: f64,
 }
 
 pub struct TriMesh {
@@ -91,6 +96,7 @@ fn convert_to_tri_mesh_mesh(tri_mesh: TriMesh) -> std::result::Result<Mesh, Stri
     Ok(mesh)
 }
 
+#[allow(dead_code)]
 pub fn load_mesh_from_obj(path: PathBuf) -> std::result::Result<Mesh, String> {
     // Open the file using the PathBuf
     let mut file = File::open(&path).map_err(|e| e.to_string())?;
@@ -109,20 +115,7 @@ pub fn load_mesh_from_obj(path: PathBuf) -> std::result::Result<Mesh, String> {
     Ok(surface_mesh)
 }
 
-pub fn load_obj_mesh(path: PathBuf) -> Mesh {
-    // Load the mesh from a file
-    // ! BUG: Die Reihenfolge der Vertices verändert sich beim Laden, sodass ich nicht die gemockten Daten verwenden kann
-    let mut assets = three_d_asset::io::load(&[path.clone()]).unwrap();
-    let model: three_d_asset::Model = assets.deserialize(path).unwrap();
-    let surface_mesh = Mesh::new(&model.geometries[0]);
-
-    // Test if the mesh is valid
-    // println!("{:?}", surface_mesh.is_valid());
-    assert!(!surface_mesh.is_closed(), "Mesh is not open");
-
-    surface_mesh
-}
-
+#[allow(dead_code)]
 pub fn save_mesh_as_obj(mesh: &tri_mesh::Mesh, file_path: PathBuf) -> Result<()> {
     let mut file = File::create(file_path)?;
 
@@ -150,7 +143,7 @@ pub fn save_mesh_as_obj(mesh: &tri_mesh::Mesh, file_path: PathBuf) -> Result<()>
     Ok(())
 }
 
-// ?! Maybe this function doenst work correctly
+#[allow(dead_code)]
 pub fn save_uv_mesh_as_obj(mesh: &tri_mesh::Mesh, mesh_tex_coords: &mesh_definition::MeshTexCoords, file_path: PathBuf) -> Result<()> {
     let mut file = File::create(file_path)?;
 
@@ -179,6 +172,7 @@ pub fn save_uv_mesh_as_obj(mesh: &tri_mesh::Mesh, mesh_tex_coords: &mesh_definit
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn load_test_mesh() -> Mesh {
     let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
     let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
@@ -186,6 +180,7 @@ pub fn load_test_mesh() -> Mesh {
     load_mesh_from_obj(new_path).unwrap()
 }
 
+#[allow(dead_code)]
 pub fn load_sparse_csv_data_to_csr_matrix(file_path: &str) -> std::result::Result<CsrMatrix<f64>, Box<dyn Error>> {
     let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
 
@@ -217,6 +212,7 @@ pub fn load_sparse_csv_data_to_csr_matrix(file_path: &str) -> std::result::Resul
     Ok(CsrMatrix::from(&coo_matrix))
 }
 
+#[allow(dead_code)]
 pub fn load_csv_to_dmatrix(file_path: &str) -> std::result::Result<DMatrix<f64>, Box<dyn Error>> {
     let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
 
@@ -238,6 +234,7 @@ pub fn load_csv_to_dmatrix(file_path: &str) -> std::result::Result<DMatrix<f64>,
     Ok(DMatrix::from_row_slice(nrows, ncols, &data))
 }
 
+#[allow(dead_code)]
 pub fn load_csv_to_bool_vec(file_path: &str) -> std::result::Result<Vec<bool>, Box<dyn Error>> {
     let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
 

@@ -1,6 +1,18 @@
+//! # Mesh Definition
+//!
+//! ## Metadata
+//!
+//! - **Author:** Jan-Piotraschke
+//! - **Date:** 2023-Dec-11
+//! - **License:** [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+//!
+//! ## Current Status
+//!
+//! - **Bugs:** -
+//! - **Todo:** -
+
 use std::collections::HashMap;
 use tri_mesh::Mesh;
-
 
 pub struct TexCoord(pub f64, pub f64);
 

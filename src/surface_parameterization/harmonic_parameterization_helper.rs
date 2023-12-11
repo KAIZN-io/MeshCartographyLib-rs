@@ -65,10 +65,6 @@ pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut mesh_definit
     }
 }
 
-
-
-// ! erste Fehlerquelle, da in C++ der Solver funktioniert
-// !!!!!!!! Oder es berechnet richtig, aber wir speichern das UV mesh falsch ab
 #[allow(non_snake_case)]
 pub fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_constrained: Vec<bool>) -> Result<DMatrix<f64>, String> {
     let nrows = L.nrows();
@@ -235,36 +231,3 @@ mod tests {
         assert_eq!(csr_matrix.col_indices(), &expected_col_indices);
     }
 }
-
-
-
-
-
-
-// idx[4716]: 4604
-// idx[4717]: 4605
-// idx[4718]: 4606
-// idx[4719]: 4607
-// idx[4720]: 4608
-// idx[4721]: 4609
-// idx[4722]: 4610
-// idx[4723]: 4611
-// idx[4724]: 4612
-// println!("idx[{}]: {}", i, idx[i]);
-
-// should be:
-// idx[4655] = 4598
-// idx[4656] = 4599
-// idx[4657] = 4600
-// idx[4658] = 4601
-// idx[4659] = 4602
-// idx[4660] = 4603
-// idx[4661] = 4604
-// idx[4662] = 4605
-// idx[4663] = 4606
-// idx[4664] = 4607
-// idx[4665] = 4608
-// idx[4666] = 4609
-// idx[4667] = 4610
-// idx[4668] = 4611
-// idx[4669] = 4612

@@ -1,3 +1,16 @@
+//! # Mesh Cartography Library Interface
+//!
+//! ## Metadata
+//!
+//! - **Author:** Jan-Piotraschke
+//! - **Date:** 2023-Dec-11
+//! - **License:** [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+//!
+//! ## Current Status
+//!
+//! - **Bugs:** -
+//! - **Todo:** -
+
 // Import necessary modules and types
 use wasm_bindgen::prelude::*;
 use std::env;
@@ -29,14 +42,13 @@ pub fn create_uv_surface() {
 
     let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
     let mesh_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-    let save_path = mesh_cartography_lib_dir.join("ellipsoid_x4_edited.obj");
+    // let save_path = mesh_cartography_lib_dir.join("ellipsoid_x4_edited.obj");
     let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
 
     // Load the mesh
     let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
 
-    // let surface_mesh = io::load_obj_mesh(mesh_path);
-    io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
+    // io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
     let (_boundary_vertices, mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
     io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv)
@@ -140,10 +152,6 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::iter::zip;
-    use nalgebra_sparse::{CsrMatrix, coo::CooMatrix};
-    use nalgebra::DMatrix;
-    use csv::ReaderBuilder;
-    use std::error::Error;
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
@@ -357,6 +365,9 @@ mod tests {
     }
 
     #[test]
+    #[allow(unused_mut)]
+    #[allow(unused_variables)]
+    #[allow(non_snake_case)]
     fn test_using_mocked_data() {
         let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(&surface_mesh);

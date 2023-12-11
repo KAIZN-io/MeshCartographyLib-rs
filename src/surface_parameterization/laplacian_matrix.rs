@@ -8,17 +8,15 @@
 //!
 //! ## Current Status
 //!
-//! - **Bugs:** None known at this time.
-//! - **Todo:** Further development tasks to be determined.
+//! - **Bugs:** -
+//! - **Todo:** -
 
 use nalgebra::DMatrix;
-use nalgebra::{Point3, DVector, Vector3};
+use nalgebra::{Point3, Vector3};
 use nalgebra_sparse::{CooMatrix, CsrMatrix};
 
 extern crate tri_mesh;
 use tri_mesh::Mesh;
-use crate::io;
-
 
 /// Get the Laplace matrix of a Surface Mesh.
 #[allow(non_snake_case)]
@@ -104,38 +102,14 @@ fn cotangent_angle(v0: &Vector3<f64>, v1: &Vector3<f64>) -> f64 {
     dot / cross
 }
 
-fn normalize_matrix(matrix: &mut CsrMatrix<f64>) {
-    // Find the maximum positive value in the matrix
-    let mut max_value = 0.0;
-    for value in matrix.values() {
-        if *value > 0.0 && *value > max_value {
-            max_value = *value;
-        }
-    }
-
-    if max_value > 0.0 {
-        // Normalize and clamp positive values
-        let values = matrix.values_mut();
-        for value in values.iter_mut() {
-            if *value > 0.0 {
-                *value = (*value / max_value).clamp(0.0, 1.0);
-            }
-        }
-    }
-}
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use nalgebra::{Point3, Vector3};
-    use std::env;
-    use std::path::PathBuf;
     use crate::io;
     use nalgebra_sparse::CsrMatrix;
-    use nalgebra::DMatrix;
-    use csv::ReaderBuilder;
-    use std::error::Error;
 
     #[test]
     fn test_cotangent_angle() {

@@ -42,8 +42,6 @@ pub fn set_boundary_constraints(mesh: &Mesh, mesh_tex_coords: &mut mesh_definiti
 mod tests {
     use super::*;
     use crate::mesh_definition::TexCoord;
-    use nalgebra_sparse::CsrMatrix;
-    use nalgebra::DMatrix;
 
     #[test]
     fn test_set_boundary_constraints() {
