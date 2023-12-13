@@ -50,8 +50,7 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
                 let index_as_u32: u32 = *vertex_k;
                 let idx_k: usize = index_as_u32 as usize;
 
-                let value = laplace_matrix[(k, j)];
-                coo.push(idx_j, idx_k, value);
+                coo.push(idx_k, idx_j, -laplace_matrix[(k, j)]);
             }
         }
     }
@@ -261,7 +260,7 @@ mod tests {
         let file_path = "data/test/L_sparse.csv";
         let L_sparse = io::load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
 
-        // Count the number of explicitly stored entries in the matrix
+        // 1. Check: Count the number of explicitly stored entries in the matrix
         assert_eq!(laplace_matrix.nnz(), L_sparse.nnz());
 
         for vertex_id in surface_mesh.vertex_iter() {
@@ -280,6 +279,7 @@ mod tests {
                 vertex_id
             );
 
+            // ! 3. Check: same values
             // if surface_mesh.is_vertex_on_boundary(vertex_id) {
             //     println!("");
             //     println!("laplace_matrix.row({:?}): {:?}", vertex_id, laplace_row);
