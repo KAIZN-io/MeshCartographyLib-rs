@@ -263,5 +263,29 @@ mod tests {
 
         // Count the number of explicitly stored entries in the matrix
         assert_eq!(laplace_matrix.nnz(), L_sparse.nnz());
+
+        for vertex_id in surface_mesh.vertex_iter() {
+            let index_as_u32: u32 = *vertex_id;
+            let index_as_usize: usize = index_as_u32 as usize;
+
+            let laplace_row = laplace_matrix.row(index_as_usize);
+            let l_sparse_row = L_sparse.row(index_as_usize);
+
+            // 2. Check: matrices have same entries coordinates for their populated data
+            // -> if they haven't, then in one matrix is one or more vertices missmatched in the matrix presentation form
+            assert_eq!(
+                laplace_row.col_indices(),
+                l_sparse_row.col_indices(),
+                "Minor indices do not match for vertex ID {:?}",
+                vertex_id
+            );
+
+            // if surface_mesh.is_vertex_on_boundary(vertex_id) {
+            //     println!("");
+            //     println!("laplace_matrix.row({:?}): {:?}", vertex_id, laplace_row);
+            //     println!("L_sparse.row({:?}): {:?}", vertex_id, l_sparse_row);
+            //     println!("");
+            // }
+        }
     }
 }
