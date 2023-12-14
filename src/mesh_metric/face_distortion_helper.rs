@@ -15,7 +15,7 @@
 
 extern crate tri_mesh;
 use tri_mesh::{Mesh, FaceID};
-use nalgebra::{Point3, Vector3};
+use nalgebra::Point3;
 
 pub struct FaceDistortionHelper<'a> {
     mesh_open: &'a Mesh,
