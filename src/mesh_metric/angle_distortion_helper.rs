@@ -30,13 +30,20 @@ impl<'a> AngleDistortionHelper<'a> {
         total_distortion / (3.0 * self.mesh_open.no_faces() as f64)  // Average angle distortion
     }
 
-    fn triangle_angles(&self, mesh: &Mesh, f: FaceID) -> Vec<f64> {
-        let pts: Vec<Point3<f64>> = mesh.vertices_around_face(f).iter().map(|&v| mesh.vertex_position(v)).collect();
+    fn triangle_angles(&self, mesh: &Mesh, face: FaceID) -> Vec<f64> {
+        let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
+        let pt1_vec = mesh.vertex_position(vertex1);
+        let pt2_vec = mesh.vertex_position(vertex2);
+        let pt3_vec = mesh.vertex_position(vertex3);
+
+        let pt1 = Point3::new(pt1_vec.x, pt1_vec.y, pt1_vec.z);
+        let pt2 = Point3::new(pt2_vec.x, pt2_vec.y, pt2_vec.z);
+        let pt3 = Point3::new(pt3_vec.x, pt3_vec.y, pt3_vec.z);
 
         let mut angles = Vec::with_capacity(3);
-        angles.push(self.compute_angle(pts[0], pts[1], pts[2]));
-        angles.push(self.compute_angle(pts[1], pts[2], pts[0]));
-        angles.push(self.compute_angle(pts[2], pts[0], pts[1]));
+        angles.push(self.compute_angle(pt1, pt2, pt3));
+        angles.push(self.compute_angle(pt2, pt3, pt1));
+        angles.push(self.compute_angle(pt3, pt1, pt2));
 
         angles
     }
