@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 # Paths
 PROJECT_DIR := $(shell pwd)
-export Meshes_Dir := $(PROJECT_DIR)/meshes
+export Meshes_Dir := $(PROJECT_DIR)/test/meshes
 
 # Determine OS
 OS := $(shell uname -s)

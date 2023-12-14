@@ -256,7 +256,7 @@ mod tests {
         let surface_mesh: Mesh = io::load_test_mesh();
         let laplace_matrix: CsrMatrix<f64> = build_laplace_matrix(&surface_mesh, true);
 
-        let file_path = "data/test/L_sparse.csv";
+        let file_path = "test/data/L_sparse.csv";
         let L_sparse = io::load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
 
         // 1. Check: Count the number of explicitly stored entries in the matrix
