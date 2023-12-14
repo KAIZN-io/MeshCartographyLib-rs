@@ -435,7 +435,7 @@ mod tests {
         let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(&surface_mesh);
 
         // Load B matrix
-        let file_path = "data/test/B.csv";
+        let file_path = "test/data/B.csv";
         let B_dense = io::load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
 
         // switch the first with the second column of B_dense
@@ -446,11 +446,11 @@ mod tests {
         }
 
         // Load L matrix
-        let file_path = "data/test/L_sparse.csv";
+        let file_path = "test/data/L_sparse.csv";
         let L_sparse = io::load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
 
         // Load is_constrained vector
-        let file_path = "data/test/is_constrained.csv";
+        let file_path = "test/data/is_constrained.csv";
         let is_constrained = io::load_csv_to_bool_vec(file_path).expect("Failed to load matrix");
 
         // // Solve the linear equation system
