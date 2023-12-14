@@ -30,6 +30,7 @@ mod surface_parameterization {
     pub mod boundary_matrix;
     pub mod laplacian_matrix;
     pub mod harmonic_parameterization_helper;
+    pub mod tessellation_helper;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -68,8 +69,13 @@ pub fn create_uv_surface() {
     // io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
     let (_boundary_vertices, mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
-    io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv)
+    io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
         .expect("Failed to save mesh to file");
+
+
+
+    // Create the Kachelmuster with Heesch numbers
+    let mut uv_mesh = io::load_mesh_from_obj(save_path_uv).unwrap();
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
