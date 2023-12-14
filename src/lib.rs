@@ -25,7 +25,10 @@ use crate::mesh_definition::TexCoord;
 mod io;
 mod monotile_border;
 
-#[allow(non_snake_case)]
+mod mesh_metric {
+    pub mod angle_distortion_helper;
+}
+
 mod surface_parameterization {
     pub mod boundary_matrix;
     pub mod laplacian_matrix;
@@ -68,8 +71,18 @@ pub fn create_uv_surface() {
     // io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
     let (_boundary_vertices, mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
-    io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv)
+
+    io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
         .expect("Failed to save mesh to file");
+
+    // Load the mesh and the UV mesh
+    let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
+    let uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+
+    // Compute the angle distortion
+    let angle_distortion_helper = mesh_metric::angle_distortion_helper::AngleDistortionHelper::new(&surface_mesh, &uv_mesh);
+    let angle_distortion = angle_distortion_helper.compute_angle_distortion();
+    log::info!("Angle distortion: {}", angle_distortion);
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
@@ -200,7 +213,6 @@ pub fn greet() {
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use std::iter::zip;
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces

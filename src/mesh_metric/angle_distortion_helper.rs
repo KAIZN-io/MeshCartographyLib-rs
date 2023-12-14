@@ -2,7 +2,7 @@ extern crate tri_mesh;
 use tri_mesh::{Mesh, FaceID};
 use nalgebra::Point3;
 
-struct AngleDistortionHelper<'a> {
+pub struct AngleDistortionHelper<'a> {
     mesh_open: &'a Mesh,
     mesh_uv: &'a Mesh,
 }
