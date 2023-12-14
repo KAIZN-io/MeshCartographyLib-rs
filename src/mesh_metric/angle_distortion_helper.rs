@@ -1,3 +1,17 @@
+//! # Calculate the angle distortion of the mesh
+//! The angle is preserved if the first fundamental form is a multiple of the identity, i.e., I(u) = η(u)Id
+//!
+//! ## Metadata
+//!
+//! - **Author:** Jan-Piotraschke
+//! - **Date:** 2023-Dec-14
+//! - **License:** [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+//!
+//! ## Current Status
+//!
+//! - **Bugs:** -
+//! - **Todo:** -
+
 extern crate tri_mesh;
 use tri_mesh::{Mesh, FaceID};
 use nalgebra::Point3;
@@ -32,9 +46,9 @@ impl<'a> AngleDistortionHelper<'a> {
 
     fn triangle_angles(&self, mesh: &Mesh, face: FaceID) -> Vec<f64> {
         let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
-        let pt1_vec = mesh.vertex_position(vertex1);
-        let pt2_vec = mesh.vertex_position(vertex2);
-        let pt3_vec = mesh.vertex_position(vertex3);
+        let pt1_vec = mesh.position(vertex1);
+        let pt2_vec = mesh.position(vertex2);
+        let pt3_vec = mesh.position(vertex3);
 
         let pt1 = Point3::new(pt1_vec.x, pt1_vec.y, pt1_vec.z);
         let pt2 = Point3::new(pt2_vec.x, pt2_vec.y, pt2_vec.z);
@@ -55,6 +69,9 @@ impl<'a> AngleDistortionHelper<'a> {
         let dot_product = ca.dot(&cb);
         let magnitude_product = ca.norm() * cb.norm();
 
-        dot_product.acos() / magnitude_product
+        // Clamp the value to avoid NaN due to floating-point inaccuracies
+        let value = (dot_product / magnitude_product).max(-1.0).min(1.0);
+
+        value.acos()
     }
 }
