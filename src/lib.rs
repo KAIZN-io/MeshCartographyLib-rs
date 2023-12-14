@@ -27,6 +27,7 @@ mod monotile_border;
 
 mod mesh_metric {
     pub mod angle_distortion_helper;
+    pub mod face_distortion_helper;
 }
 
 mod surface_parameterization {
@@ -83,6 +84,11 @@ pub fn create_uv_surface() {
     let angle_distortion_helper = mesh_metric::angle_distortion_helper::AngleDistortionHelper::new(&surface_mesh, &uv_mesh);
     let angle_distortion = angle_distortion_helper.compute_angle_distortion();
     log::info!("Angle distortion: {}", angle_distortion);
+
+    // Compute the face distortion
+    let face_distortion_helper = mesh_metric::face_distortion_helper::FaceDistortionHelper::new(&surface_mesh, &uv_mesh);
+    let face_distortion = face_distortion_helper.compute_face_distortion();
+    log::info!("Face distortion: {}", face_distortion);
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
