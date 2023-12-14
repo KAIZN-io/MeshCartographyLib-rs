@@ -13,6 +13,26 @@
 
 use crate::mesh_definition::TexCoord;
 
+/// Returns the four corner coordinates of a square.
+///
+/// ## Arguments
+///
+/// - `origin`: The bottom-left corner of the square (x, y).
+/// - `side_length`: The length of each side of the square.
+///
+/// ## Returns
+///
+/// Returns a `Vec<TexCoord>` containing the coordinates of the four corners of the square.
+pub fn square_corners(origin: TexCoord, side_length: f64) -> Vec<TexCoord> {
+    let TexCoord(x, y) = origin;
+    vec![
+        TexCoord(x, y),                            // Bottom-left
+        TexCoord(x + side_length, y),              // Bottom-right
+        TexCoord(x + side_length, y + side_length), // Top-right
+        TexCoord(x, y + side_length),              // Top-left
+    ]
+}
+
 pub fn distribute_vertices_around_square(boundary_vertices: &[tri_mesh::VertexID], side_length: f64, tolerance: f64, total_length: f64) -> Vec<TexCoord> {
     let n = boundary_vertices.len();
     let step_size = total_length / n as f64;

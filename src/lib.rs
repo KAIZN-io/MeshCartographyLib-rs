@@ -101,6 +101,15 @@ pub fn create_uv_surface() {
 
     // Create the Kachelmuster with Heesch numbers
     let mut uv_mesh = io::load_mesh_from_obj(save_path_uv).unwrap();
+
+    // Get the corner coordinates of the square
+    let origin = TexCoord(0.0, 0.0);
+    let side_length = 1.0;
+    let corners = monotile_border::square_corners(origin, side_length);
+
+    for corner_coord in corners {
+        println!("corner_coord: {:?} {:?}", corner_coord.0, corner_coord.1);
+    }
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
