@@ -46,7 +46,7 @@ mod tests {
     #[test]
     fn test_set_boundary_constraints() {
         // Load B matrix
-        let file_path = "data/test/B.csv";
+        let file_path = "test/data/B.csv";
         let B_dense = io::load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
 
         let surface_mesh = io::load_test_mesh();
