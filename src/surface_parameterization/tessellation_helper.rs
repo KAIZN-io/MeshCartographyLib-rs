@@ -15,7 +15,7 @@ use crate::mesh_definition;
 use crate::mesh_definition::TexCoord;
 use std::collections::HashMap;
 use tri_mesh::{Mesh, VertexID};
-use nalgebra::{DMatrix, DVector, Vector2, Matrix2, SVD};
+use nalgebra::{DMatrix, DVector, Vector2, Vector3, Matrix2, SVD};
 
 pub struct Tessellation {
     border_v_map: HashMap<usize, Vec<VertexID>>,
@@ -30,8 +30,82 @@ impl Tessellation {
         }
     }
 
-    pub fn rotate_and_shift_mesh(&self, mesh: &mut tri_mesh::Mesh, angle_degrees: f64) {
+    pub fn rotate_and_shift_mesh(&self, mesh: &mut tri_mesh::Mesh, angle_degrees: f64, docking_side: usize) {
         let angle_radians = angle_degrees.to_radians();
+        let threshold = 1e-10;
+
+        // Get the border of the mesh
+        let main_border = self.border_map.get(&docking_side).unwrap();
+        let connection_side = self.border_map.get(&docking_side).unwrap();
+
+        // Get the border of the mesh and convert it to Vec<Vector2<f64>>
+        if let Some(main_border_coords) = self.border_map.get(&docking_side) {
+            let mut main_border: Vec<Vector2<f64>> = main_border_coords
+                .iter()
+                .map(|coord| Vector2::new(coord.0, coord.1))
+                .collect();
+
+            // Now main_border is of the correct type for order_data
+            self.order_data(&mut main_border);
+
+            // Collect all points of main_border into a matrix
+            let main_border_matrix: DMatrix<f64> = DMatrix::from_iterator(
+                main_border.len(),
+                2,
+                main_border.into_iter().flat_map(|v| vec![v.x, v.y]),
+            );
+
+            // Pre-rotation and thresholding
+            if let Some(connection_side_coords) = self.border_map.get(&docking_side) {
+                let mut vec = Vec::new();
+                for pt_2d in connection_side_coords {
+                    let mut transformed_2d = self.custom_rotate(Vector2::new(pt_2d.0, pt_2d.1), angle_radians);
+
+                    // Apply threshold
+                    if transformed_2d.x.abs() < threshold {
+                        transformed_2d.x = 0.0;
+                    }
+                    if transformed_2d.y.abs() < threshold {
+                        transformed_2d.y = 0.0;
+                    }
+                    vec.push(transformed_2d);
+                }
+
+                // Order the data of the rotated connection side
+                self.order_data(&mut vec);
+
+                // Transform vec into a DMatrix
+                let connection_matrix: DMatrix<f64> = DMatrix::from_iterator(
+                    vec.len(),
+                    2,
+                    vec.into_iter().flat_map(|v| vec![v.x, v.y]),
+                );
+
+                // Calculate shifts
+                let shift_x_coordinates = main_border_matrix[(0, 0)] - connection_matrix[(0, 0)];
+                let shift_y_coordinates = main_border_matrix[(0, 1)] - connection_matrix[(0, 1)];
+
+                for v in mesh.vertex_iter() {
+                    let pt_3d = mesh.position(v);
+                    let pt_2d = Vector2::new(pt_3d.x, pt_3d.y);
+                    let mut transformed_2d = self.custom_rotate(pt_2d, angle_radians);
+
+                    // Apply threshold
+                    if transformed_2d.x.abs() < threshold {
+                        transformed_2d.x = 0.0;
+                    }
+                    if transformed_2d.y.abs() < threshold {
+                        transformed_2d.y = 0.0;
+                    }
+
+                    let x = transformed_2d.x + shift_x_coordinates;
+                    let y = transformed_2d.y + shift_y_coordinates;
+                    mesh.set_vertex_position(v, tri_mesh::vec3(x, y, 0.0));
+                }
+            }
+        } else {
+            panic!("The docking side {} is not found in border_map", docking_side);
+        }
     }
 
     pub fn calculate_angle(&self, border1: &[Vector2<f64>], border2: &[Vector2<f64>]) -> f64 {
