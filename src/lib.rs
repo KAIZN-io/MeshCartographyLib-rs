@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use tri_mesh::{Mesh, VertexID};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
+use nalgebra::{Vector2, Matrix2, SVD};
 
 mod mesh_definition;
 use crate::mesh_definition::TexCoord;
@@ -100,9 +101,31 @@ pub fn create_uv_surface() {
 
 
     // Create the Kachelmuster with Heesch numbers
-    let mut uv_mesh = io::load_mesh_from_obj(save_path_uv).unwrap();
+    let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
 
     let (border_v_map, border_map) = monotile_border::get_sub_borders(&boundary_vertices, &mesh_tex_coords);
+
+    let tessellation = crate::surface_parameterization::tessellation_helper::Tessellation;
+    let size = border_map.len();
+    for i in 0..size {
+        let docking_side = i;
+        let next_index = (i + 1) % size;
+
+        // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&next_index]
+        let border1: Vec<Vector2<f64>> = border_map[&next_index]
+            .iter()
+            .map(|coord| Vector2::new(coord.0, coord.1))
+            .collect();
+
+        // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&i]
+        let border2: Vec<Vector2<f64>> = border_map[&i]
+            .iter()
+            .map(|coord| Vector2::new(coord.0, coord.1))
+            .collect();
+
+        let rotation_angle = tessellation.calculate_angle(&border1, &border2);
+        println!("rotation_angle: {}", rotation_angle);
+    }
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {

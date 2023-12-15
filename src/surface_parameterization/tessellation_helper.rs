@@ -13,10 +13,10 @@
 
 use nalgebra::{Vector2, Matrix2, SVD};
 
-struct Tessellation;
+pub struct Tessellation;
 
 impl Tessellation {
-    fn calculate_angle(&self, border1: &[Vector2<f64>], border2: &[Vector2<f64>]) -> f64 {
+    pub fn calculate_angle(&self, border1: &[Vector2<f64>], border2: &[Vector2<f64>]) -> f64 {
         let dir1 = self.fit_line(border1);
         let dir2 = self.fit_line(border2);
 
