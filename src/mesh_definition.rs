@@ -14,6 +14,7 @@
 use std::collections::HashMap;
 use tri_mesh::Mesh;
 
+#[derive(Clone)]
 pub struct TexCoord(pub f64, pub f64);
 
 pub struct MeshTexCoords {
