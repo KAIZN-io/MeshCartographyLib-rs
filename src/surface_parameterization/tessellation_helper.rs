@@ -11,7 +11,7 @@
 //! - **Bugs:** -
 //! - **Todo:** -
 
-use nalgebra::{Vector2, Matrix2, SVD};
+use nalgebra::{DMatrix, DVector, Vector2, Matrix2, SVD};
 
 pub struct Tessellation;
 
@@ -59,6 +59,36 @@ impl Tessellation {
 
         Vector2::new(x_prime, y_prime)
     }
+
+    pub fn order_data(&self, vec: &mut Vec<Vector2<f64>>) {
+        let size = vec.len();
+        let mut x = DVector::from_iterator(size, vec.iter().map(|v| v.x));
+        let y = DVector::from_iterator(size, vec.iter().map(|v| v.y));
+
+        // Creating the design matrix for linear regression
+        let a = DVector::from_element(size, 1.0);
+        let b = DMatrix::from_columns(&[x.clone(), a]);
+
+        // Perform linear regression using SVD
+        let svd = b.svd(true, true);
+        let coeffs = svd.solve(&y, std::f64::EPSILON).unwrap();
+        let m = coeffs[0];
+        let coeff_b = coeffs[1]; // Renamed to avoid conflict with 'b' in the closure
+
+        // Check if all x-values are the same (vertical line)
+        let vertical_line = x.max() - x.min() < std::f64::EPSILON;
+
+        // Sort the vector based on the parameter t
+        vec.sort_by(|a, b| {
+            if vertical_line {
+                a.y.partial_cmp(&b.y).unwrap()
+            } else {
+                let ta = (a.x + m * (a.y - coeff_b)) / (1.0 + m * m).sqrt();
+                let tb = (b.x + m * (b.y - coeff_b)) / (1.0 + m * m).sqrt();
+                ta.partial_cmp(&tb).unwrap()
+            }
+        });
+    }
 }
 
 
@@ -67,6 +97,25 @@ impl Tessellation {
 mod tests {
     use super::*;
     use std::f64::consts::PI;
+    use nalgebra::Vector2;
+
+    #[test]
+    fn test_order_data() {
+        // Initialize a Tessellation instance
+        let tessellation = Tessellation;
+
+        let mut points = vec![
+            Vector2::new(1.0, 2.0),
+            Vector2::new(2.0, 3.0),
+            Vector2::new(0.5, 1.5),
+        ];
+
+        // Call the order_data function
+        tessellation.order_data(&mut points);
+
+        // check if the points are sorted by x-coordinate:
+        assert!(points.windows(2).all(|w| w[0].x <= w[1].x));
+    }
 
     // #[test]
     // fn test_fit_line() {
