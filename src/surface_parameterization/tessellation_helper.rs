@@ -15,7 +15,19 @@ use crate::mesh_definition;
 use crate::mesh_definition::TexCoord;
 use std::collections::HashMap;
 use tri_mesh::{Mesh, VertexID};
-use nalgebra::{DMatrix, DVector, Vector2, Vector3, Matrix2, SVD};
+use nalgebra::{DMatrix, DVector, Vector2, Matrix2, SVD};
+
+// ! MOVE it to the monotile_border module
+fn create_twin_border_map(corner_count: usize, current_border: usize) -> HashMap<usize, usize> {
+    let mut twin_border_map = HashMap::new();
+
+    for i in 0..(corner_count - 1) {
+        twin_border_map.insert(i, current_border - i);
+        twin_border_map.insert(current_border - i, i);
+    }
+
+    twin_border_map
+}
 
 pub struct Tessellation {
     border_v_map: HashMap<usize, Vec<VertexID>>,
@@ -108,6 +120,53 @@ impl Tessellation {
         }
     }
 
+    pub fn add_mesh(&mut self, mesh: &mut Mesh, mesh_original: &mut Mesh, docking_side: usize) {
+        // A map to relate old vertex IDs in `mesh` to new ones in `mesh_original`
+        let mut reindexed_vertices = HashMap::new();
+
+        let current_border = 3;
+        let corner_count = 4;
+        let twin_border_map = create_twin_border_map(corner_count, current_border);
+
+        for v in mesh.vertex_iter() {
+            // let kachelmuster_twin_v = &mut self.equivalent_vertices[v.idx()];  // ! Fix this
+
+            let border_list = &self.border_v_map[&twin_border_map[&docking_side]];
+
+            let mut pt_3d = tri_mesh::vec3(0.0, 0.0, 0.0);
+            if let Some(index) = border_list.iter().position(|&vertex| vertex == v) {
+                pt_3d = mesh.position(border_list[index]);
+            } else {
+                pt_3d = mesh.position(v);
+            }
+
+            // Check if the vertex already exists in the mesh
+            let existing_v = self.find_vertex_by_coordinates(mesh_original, pt_3d);
+
+            let shifted_v = match existing_v {
+                Some(vertex_id) => vertex_id,
+                None => {
+                    let new_vertex_id = mesh_original.add_vertex(pt_3d); // This is hypothetical
+                    // kachelmuster_twin_v.push(new_vertex_id.idx());
+                    new_vertex_id
+                }
+            };
+
+            reindexed_vertices.insert(v, shifted_v);
+        }
+
+        // Add faces from the rotated mesh to the original mesh
+        for face in mesh.face_iter() {
+            let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
+
+            let v1 = reindexed_vertices[&vertex1];
+            let v2 = reindexed_vertices[&vertex2];
+            let v3 = reindexed_vertices[&vertex3];
+
+            mesh_original.add_face(v1, v2, v3);
+        }
+    }
+
     pub fn calculate_angle(&self, border1: &[Vector2<f64>], border2: &[Vector2<f64>]) -> f64 {
         let dir1 = self.fit_line(border1);
         let dir2 = self.fit_line(border2);
@@ -152,7 +211,7 @@ impl Tessellation {
         Vector2::new(x_prime, y_prime)
     }
 
-    pub fn order_data(&self, vec: &mut Vec<Vector2<f64>>) {
+    fn order_data(&self, vec: &mut Vec<Vector2<f64>>) {
         let size = vec.len();
         let mut x = DVector::from_iterator(size, vec.iter().map(|v| v.x));
         let y = DVector::from_iterator(size, vec.iter().map(|v| v.y));
@@ -180,6 +239,15 @@ impl Tessellation {
                 ta.partial_cmp(&tb).unwrap()
             }
         });
+    }
+
+    fn find_vertex_by_coordinates(&self, mesh: &Mesh, pt: tri_mesh::Vec3) -> Option<VertexID> {
+        for vertex_id in mesh.vertex_iter() {
+            if mesh.position(vertex_id) == pt {
+                return Some(vertex_id);
+            }
+        }
+        None
     }
 }
 

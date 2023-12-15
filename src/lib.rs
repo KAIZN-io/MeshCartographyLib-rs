@@ -101,14 +101,14 @@ pub fn create_uv_surface() {
 
 
     // Create the Kachelmuster with Heesch numbers
-    let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+    let mut uv_mesh_centre = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
 
     let (border_v_map, border_map) = monotile_border::get_sub_borders(&boundary_vertices, &mesh_tex_coords);
 
-    let tessellation = crate::surface_parameterization::tessellation_helper::Tessellation;
+    let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
     let size = border_map.len();
     for i in 0..size {
-        let docking_side = i;
+        let docking_side: usize = i;
         let next_index = (i + 1) % size;
 
         // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&next_index]
@@ -124,7 +124,10 @@ pub fn create_uv_surface() {
             .collect();
 
         let rotation_angle = tessellation.calculate_angle(&border1, &border2);
-        println!("rotation_angle: {}", rotation_angle);
+
+        let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+        tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
+        tessellation.add_mesh(&mut uv_mesh, &mut uv_mesh_centre, docking_side);
     }
 }
 
