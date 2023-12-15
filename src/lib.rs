@@ -102,49 +102,7 @@ pub fn create_uv_surface() {
     // Create the Kachelmuster with Heesch numbers
     let mut uv_mesh = io::load_mesh_from_obj(save_path_uv).unwrap();
 
-    // Get the corner coordinates of the square
-    let origin = TexCoord(0.0, 0.0);
-    let side_length = 1.0;
-    let corners = monotile_border::square_corners(origin, side_length);
-
-
-    let mut current_border = 0;
-    let mut border_v_map: HashMap<usize, Vec<VertexID>> = HashMap::new();
-    let mut border_map: HashMap<usize, Vec<TexCoord>> = HashMap::new();
-
-    let first_v = boundary_vertices[0];
-    let first_point = mesh_tex_coords.get_tex_coord(first_v).unwrap().clone();
-    border_v_map.entry(current_border).or_insert(Vec::new()).push(first_v.clone());
-    border_map.entry(current_border).or_insert(Vec::new()).push(first_point.clone());
-
-    for v in boundary_vertices.iter().skip(1) {
-        let point = mesh_tex_coords.get_tex_coord(*v).unwrap().clone();
-
-        border_v_map.entry(current_border).or_insert(Vec::new()).push(*v);
-        border_map.entry(current_border).or_insert(Vec::new()).push(point.clone());
-
-        // Check if we crossed a corner and need to start a new border
-        for corner in corners.iter() {
-            if (point.0 - corner.0).abs() < 1e-4 && (point.1 - corner.1).abs() < 1e-4 && *v != first_v {
-                current_border += 1;
-                border_v_map.entry(current_border).or_insert(Vec::new()).push(*v);
-                border_map.entry(current_border).or_insert(Vec::new()).push(point.clone());
-                break;
-            }
-        }
-    }
-
-    border_v_map.entry(current_border).or_insert(Vec::new()).push(first_v);
-    border_map.entry(current_border).or_insert(Vec::new()).push(first_point.clone());
-
-    // for v in boundary_vertices {
-    //     let point = mesh_tex_coords.get_tex_coord(v).unwrap();
-    //     println!("v: {:?} {:?}", point.0, point.1);
-    // }
-
-    // for corner_coord in corners {
-    //     println!("corner_coord: {:?} {:?}", corner_coord.0, corner_coord.1);
-    // }
+    let (border_v_map, border_map) = monotile_border::get_sub_borders(&boundary_vertices, &mesh_tex_coords);
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
