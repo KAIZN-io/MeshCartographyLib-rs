@@ -11,11 +11,29 @@
 //! - **Bugs:** -
 //! - **Todo:** -
 
+use crate::mesh_definition;
+use crate::mesh_definition::TexCoord;
+use std::collections::HashMap;
+use tri_mesh::{Mesh, VertexID};
 use nalgebra::{DMatrix, DVector, Vector2, Matrix2, SVD};
 
-pub struct Tessellation;
+pub struct Tessellation {
+    border_v_map: HashMap<usize, Vec<VertexID>>,
+    border_map: HashMap<usize, Vec<TexCoord>>,
+}
 
 impl Tessellation {
+    pub fn new(border_v_map: HashMap<usize, Vec<VertexID>>, border_map: HashMap<usize, Vec<TexCoord>>) -> Self {
+        Tessellation {
+            border_v_map,
+            border_map,
+        }
+    }
+
+    pub fn rotate_and_shift_mesh(&self, mesh: &mut tri_mesh::Mesh, angle_degrees: f64) {
+        let angle_radians = angle_degrees.to_radians();
+    }
+
     pub fn calculate_angle(&self, border1: &[Vector2<f64>], border2: &[Vector2<f64>]) -> f64 {
         let dir1 = self.fit_line(border1);
         let dir2 = self.fit_line(border2);
@@ -98,11 +116,19 @@ mod tests {
     use super::*;
     use std::f64::consts::PI;
     use nalgebra::Vector2;
+    use std::collections::HashMap;
+
+    // Helper function to create dummy data for initialization
+    fn create_dummy_data() -> (HashMap<usize, Vec<VertexID>>, HashMap<usize, Vec<TexCoord>>) {
+        let border_v_map = HashMap::new();
+        let border_map = HashMap::new();
+        (border_v_map, border_map)
+    }
 
     #[test]
     fn test_order_data() {
-        // Initialize a Tessellation instance
-        let tessellation = Tessellation;
+        let (border_v_map, border_map) = create_dummy_data();
+        let tessellation = Tessellation::new(border_v_map, border_map);
 
         let mut points = vec![
             Vector2::new(1.0, 2.0),
@@ -113,13 +139,14 @@ mod tests {
         // Call the order_data function
         tessellation.order_data(&mut points);
 
-        // check if the points are sorted by x-coordinate:
+        // Check if the points are sorted by x-coordinate:
         assert!(points.windows(2).all(|w| w[0].x <= w[1].x));
     }
 
     // #[test]
     // fn test_fit_line() {
-    //     let tessellation = Tessellation;
+    //     let (border_v_map, border_map) = create_dummy_data();
+    //     let tessellation = Tessellation::new(border_v_map, border_map);
     //     let points = vec![
     //         Vector2::new(1.0, 2.0),
     //         Vector2::new(2.0, 3.0),
@@ -165,7 +192,8 @@ mod tests {
 
     #[test]
     fn test_custom_rotate_90_degrees() {
-        let tessellation = Tessellation;
+        let (border_v_map, border_map) = create_dummy_data();
+        let tessellation = Tessellation::new(border_v_map, border_map);
         let point = Vector2::new(1.0, 0.0);
         let rotated_point = tessellation.custom_rotate(point, PI / 2.0); // Rotate 90 degrees
         assert!((rotated_point.x.abs() < 1e-5) && ((rotated_point.y - 1.0).abs() < 1e-5));
@@ -173,7 +201,8 @@ mod tests {
 
     #[test]
     fn test_custom_rotate_180_degrees() {
-        let tessellation = Tessellation;
+        let (border_v_map, border_map) = create_dummy_data();
+        let tessellation = Tessellation::new(border_v_map, border_map);
         let point = Vector2::new(1.0, 0.0);
         let rotated_point = tessellation.custom_rotate(point, PI); // Rotate 180 degrees
         assert!(((rotated_point.x + 1.0).abs() < 1e-5) && (rotated_point.y.abs() < 1e-5));
@@ -181,7 +210,8 @@ mod tests {
 
     #[test]
     fn test_custom_rotate_45_degrees() {
-        let tessellation = Tessellation;
+        let (border_v_map, border_map) = create_dummy_data();
+        let tessellation = Tessellation::new(border_v_map, border_map);
         let point = Vector2::new(1.0, 0.0);
         let rotated_point = tessellation.custom_rotate(point, PI / 4.0); // Rotate 45 degrees
         let sqrt2_over_2 = (2.0f64).sqrt() / 2.0;
