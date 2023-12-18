@@ -70,8 +70,10 @@ impl Tessellation {
                 // Order the data of the rotated connection side
                 self.order_data(&mut vec);
 
-                // println!("main_border: {:?}", main_border);
-                // println!("vec: {:?}", vec);
+                println!("");
+                println!("main_border: {:?}", main_border);
+                println!("");
+                println!("vec: {:?}", vec);
 
                 // Calculate shifts
                 let shift_x_coordinates = main_border[0].x - vec[0].x;
@@ -179,6 +181,10 @@ impl Tessellation {
 
         let mut x_prime = pt.x * cos_theta - pt.y * sin_theta;
         let mut y_prime = pt.x * sin_theta + pt.y * cos_theta;
+
+        // Adjust precision
+        x_prime = format!("{:.6}", x_prime).parse().unwrap();
+        y_prime = format!("{:.6}", y_prime).parse().unwrap();
 
         // Apply threshold
         let threshold = 1e-10;

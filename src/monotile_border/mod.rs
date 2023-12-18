@@ -39,6 +39,10 @@ pub fn distribute_vertices_around_square(boundary_vertices: &[tri_mesh::VertexID
             tex_coord = TexCoord(0.0, (side_length - l) / side_length);
         }
 
+        // Adjust precision
+        tex_coord.0 = format!("{:.6}", tex_coord.0).parse().unwrap();
+        tex_coord.1 = format!("{:.6}", tex_coord.1).parse().unwrap();
+
         // Apply tolerance
         if tex_coord.0 < tolerance {
             tex_coord.0 = 0.0;
