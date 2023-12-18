@@ -32,13 +32,17 @@ fn create_twin_border_map(corner_count: usize, current_border: usize) -> HashMap
 pub struct Tessellation {
     border_v_map: HashMap<usize, Vec<VertexID>>,
     border_map: HashMap<usize, Vec<TexCoord>>,
+    monotile_border_v: usize,
 }
 
 impl Tessellation {
     pub fn new(border_v_map: HashMap<usize, Vec<VertexID>>, border_map: HashMap<usize, Vec<TexCoord>>) -> Self {
+        let monotile_border_v = border_v_map.values().map(|v| v.len()).sum();
+
         Tessellation {
             border_v_map,
             border_map,
+            monotile_border_v,
         }
     }
 
@@ -93,7 +97,7 @@ impl Tessellation {
 
     pub fn add_mesh(&mut self, mesh: &mut Mesh, mesh_original: &mut Mesh, docking_side: usize) {
         // A map to relate old vertex IDs in `mesh` to new ones in `mesh_original`
-        let mut reindexed_vertices = HashMap::new();
+        let mut reindexed_vertices: HashMap<VertexID, VertexID> = HashMap::new();
 
         let current_border = 3;
         let corner_count = 4;
@@ -130,18 +134,30 @@ impl Tessellation {
             reindexed_vertices.insert(v, shifted_v);
         }
 
+        println!("border_v_map: {:?}", self.border_v_map.len());
+        println!("number of vertices in mesh: {:?}", mesh_original.no_vertices());
+        println!("monotile_border_v: {:?}", self.monotile_border_v);
+
+        // ! Todo: Connecting the vertices is not working yet
+        // ! Warum ist das nämlich soooo langsam??
         // Add faces from the rotated mesh to the original mesh
-        for face in mesh.face_iter() {
-            let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
+        // for face in mesh.face_iter() {
+        //     let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
 
-            let v1: VertexID = reindexed_vertices[&vertex1];
-            let v2: VertexID = reindexed_vertices[&vertex2];
-            let v3: VertexID = reindexed_vertices[&vertex3];
+        //     // Get what the old vertex IDs are in the original mesh, which consists now of all the Tessellation vertices
+        //     let v1: VertexID = reindexed_vertices[&vertex1];
+        //     let v2: VertexID = reindexed_vertices[&vertex2];
+        //     let v3: VertexID = reindexed_vertices[&vertex3];
 
-            // println!("v1: {:?}, v2: {:?}, v3: {:?}", mesh.position(v1), mesh.position(v2), mesh.position(v3));
+        //     // println!("vertex1 {:?} -> {:?}", vertex1, v1);
+        //     // println!("vertex2 {:?} -> {:?}", vertex2, v2);
+        //     // println!("vertex3 {:?} -> {:?}", vertex3, v3);
 
-            mesh_original.add_face(v1, v2, v3);
-        }
+
+        //     println!("v1: {:?}, v2: {:?}, v3: {:?}", mesh_original.position(v1), mesh_original.position(v2), mesh_original.position(v3));
+
+        //     mesh_original.add_face(v1, v2, v3);
+        // }
     }
 
     pub fn calculate_angle(&self, border1: &[Vector2<f64>], border2: &[Vector2<f64>]) -> f64 {
