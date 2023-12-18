@@ -99,6 +99,7 @@ impl Tessellation {
         let corner_count = 4;
         let twin_border_map = create_twin_border_map(corner_count, current_border);
 
+        let mut shifted_v: VertexID;
         for v in mesh.vertex_iter() {
             // let kachelmuster_twin_v = &mut self.equivalent_vertices[v.idx()];  // ! Fix this
 
@@ -114,14 +115,17 @@ impl Tessellation {
             // Check if the vertex already exists in the mesh
             let existing_v = self.find_vertex_by_coordinates(mesh_original, pt_3d);
 
-            let shifted_v = match existing_v {
-                Some(vertex_id) => vertex_id,
+            match existing_v {
+                Some(vertex) => {
+                    // Vertex already exists in the mesh
+                    shifted_v = vertex;
+                },
                 None => {
-                    let new_vertex_id = mesh_original.add_vertex(pt_3d); // This is hypothetical
-                    // kachelmuster_twin_v.push(new_vertex_id.idx());
-                    new_vertex_id
-                }
-            };
+                    // Vertex does not exist, add it to the mesh
+                    shifted_v = mesh_original.add_vertex(pt_3d);
+                    // kachelmuster_twin_v.push(shifted_v); // Assuming `kachelmuster_twin_v` is a Vec<VertexID>
+                },
+            }
 
             reindexed_vertices.insert(v, shifted_v);
         }
@@ -130,9 +134,11 @@ impl Tessellation {
         for face in mesh.face_iter() {
             let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
 
-            let v1 = reindexed_vertices[&vertex1];
-            let v2 = reindexed_vertices[&vertex2];
-            let v3 = reindexed_vertices[&vertex3];
+            let v1: VertexID = reindexed_vertices[&vertex1];
+            let v2: VertexID = reindexed_vertices[&vertex2];
+            let v3: VertexID = reindexed_vertices[&vertex3];
+
+            // println!("v1: {:?}, v2: {:?}, v3: {:?}", mesh.position(v1), mesh.position(v2), mesh.position(v3));
 
             mesh_original.add_face(v1, v2, v3);
         }
@@ -315,6 +321,11 @@ mod tests {
     //     println!("angle: {}", angle);
     //     assert!((angle - 45.0).abs() < 1e-5);
     // }
+
+    #[test]
+    fn test_add_mesh() {
+
+    }
 
     #[test]
     fn test_custom_rotate_90_degrees() {
