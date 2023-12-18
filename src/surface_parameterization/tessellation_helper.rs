@@ -44,7 +44,6 @@ impl Tessellation {
 
     pub fn rotate_and_shift_mesh(&self, mesh: &mut tri_mesh::Mesh, angle_degrees: f64, docking_side: usize) {
         let angle_radians = angle_degrees.to_radians();
-        let threshold = 1e-10;
 
         // Get the border of the mesh
         let main_border = self.border_map.get(&docking_side).unwrap();
@@ -72,14 +71,6 @@ impl Tessellation {
                 let mut vec = Vec::new();
                 for pt_2d in connection_side_coords {
                     let mut transformed_2d = self.custom_rotate(Vector2::new(pt_2d.0, pt_2d.1), angle_radians);
-
-                    // Apply threshold
-                    if transformed_2d.x.abs() < threshold {
-                        transformed_2d.x = 0.0;
-                    }
-                    if transformed_2d.y.abs() < threshold {
-                        transformed_2d.y = 0.0;
-                    }
                     vec.push(transformed_2d);
                 }
 
@@ -101,14 +92,6 @@ impl Tessellation {
                     let pt_3d = mesh.position(v);
                     let pt_2d = Vector2::new(pt_3d.x, pt_3d.y);
                     let mut transformed_2d = self.custom_rotate(pt_2d, angle_radians);
-
-                    // Apply threshold
-                    if transformed_2d.x.abs() < threshold {
-                        transformed_2d.x = 0.0;
-                    }
-                    if transformed_2d.y.abs() < threshold {
-                        transformed_2d.y = 0.0;
-                    }
 
                     let x = transformed_2d.x + shift_x_coordinates;
                     let y = transformed_2d.y + shift_y_coordinates;
@@ -205,8 +188,17 @@ impl Tessellation {
         let cos_theta = angle_radians.cos();
         let sin_theta = angle_radians.sin();
 
-        let x_prime = pt.x * cos_theta - pt.y * sin_theta;
-        let y_prime = pt.x * sin_theta + pt.y * cos_theta;
+        let mut x_prime = pt.x * cos_theta - pt.y * sin_theta;
+        let mut y_prime = pt.x * sin_theta + pt.y * cos_theta;
+
+        // Apply threshold
+        let threshold = 1e-10;
+        if x_prime.abs() < threshold {
+            x_prime = 0.0;
+        }
+        if y_prime.abs() < threshold {
+            y_prime = 0.0;
+        }
 
         Vector2::new(x_prime, y_prime)
     }
