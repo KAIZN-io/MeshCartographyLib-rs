@@ -59,13 +59,6 @@ impl Tessellation {
             // Now main_border is of the correct type for order_data
             self.order_data(&mut main_border);
 
-            // Collect all points of main_border into a matrix
-            let main_border_matrix: DMatrix<f64> = DMatrix::from_iterator(
-                main_border.len(),
-                2,
-                main_border.into_iter().flat_map(|v| vec![v.x, v.y]),
-            );
-
             // Pre-rotation and thresholding
             if let Some(connection_side_coords) = self.border_map.get(&docking_side) {
                 let mut vec = Vec::new();
@@ -77,12 +70,12 @@ impl Tessellation {
                 // Order the data of the rotated connection side
                 self.order_data(&mut vec);
 
-                // Calculate shifts
-                let shift_x_coordinates = main_border_matrix[(0, 0)] - vec[0].x;
-                let shift_y_coordinates = main_border_matrix[(0, 1)] - vec[0].y;
+                // println!("main_border: {:?}", main_border);
+                // println!("vec: {:?}", vec);
 
-                println!("shift_x_coordinates: {}", shift_x_coordinates);
-                println!("shift_y_coordinates: {}", shift_y_coordinates);
+                // Calculate shifts
+                let shift_x_coordinates = main_border[0].x - vec[0].x;
+                let shift_y_coordinates = main_border[0].y - vec[0].y;
 
                 for v in mesh.vertex_iter() {
                     let pt_3d = mesh.position(v);
