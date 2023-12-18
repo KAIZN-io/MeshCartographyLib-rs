@@ -9,7 +9,7 @@
 //! ## Current Status
 //!
 //! - **Bugs:** -
-//! - **Todo:** -
+//! - **Todo:** - Tessellation doesnt work yet
 
 // Import necessary modules and types
 use wasm_bindgen::prelude::*;
@@ -74,7 +74,7 @@ pub fn create_uv_surface() {
 
     // io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
-    let (boundary_vertices, mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
+    let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
 
     io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
         .expect("Failed to save mesh to file");
@@ -104,6 +104,7 @@ pub fn create_uv_surface() {
     let mut uv_mesh_centre = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
 
     let (border_v_map, border_map) = monotile_border::get_sub_borders(&boundary_vertices, &mesh_tex_coords);
+    let save_path_uv2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv2.obj");
 
     let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
     let size = border_map.len();
@@ -127,7 +128,15 @@ pub fn create_uv_surface() {
 
         let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
         tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
-        tessellation.add_mesh(&mut uv_mesh, &mut uv_mesh_centre, docking_side);
+
+        // TODO: this is only a hack: set mesh_tex_coords.get_tex_coord(vertex_id) to uv_mesh.position(vertex_id)
+        for vertex_id in uv_mesh.vertex_iter() {
+            mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(uv_mesh.position(vertex_id).x, uv_mesh.position(vertex_id).y));
+        }
+        io::save_uv_mesh_as_obj(&uv_mesh, &mesh_tex_coords, save_path_uv2.clone())
+            .expect("Failed to save mesh to file");
+        log::info!("docking_side: {}", docking_side);
+        // tessellation.add_mesh(&mut uv_mesh, &mut uv_mesh_centre, docking_side);
     }
 }
 
