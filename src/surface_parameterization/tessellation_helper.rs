@@ -45,9 +45,10 @@ impl Tessellation {
     pub fn rotate_and_shift_mesh(&self, mesh: &mut tri_mesh::Mesh, angle_degrees: f64, docking_side: usize) {
         let angle_radians = angle_degrees.to_radians();
 
-        // Get the border of the mesh
-        let main_border = self.border_map.get(&docking_side).unwrap();
-        let connection_side = self.border_map.get(&docking_side).unwrap();
+        // Todo: make this global
+        let current_border = 3;
+        let corner_count = 4;
+        let twin_border_map = create_twin_border_map(corner_count, current_border);
 
         // Get the border of the mesh and convert it to Vec<Vector2<f64>>
         if let Some(main_border_coords) = self.border_map.get(&docking_side) {
@@ -60,7 +61,8 @@ impl Tessellation {
             self.order_data(&mut main_border);
 
             // Pre-rotation and thresholding
-            if let Some(connection_side_coords) = self.border_map.get(&docking_side) {
+
+            if let Some(connection_side_coords) = self.border_map.get(twin_border_map.get(&docking_side).unwrap()) {
                 let mut vec = Vec::new();
                 for pt_2d in connection_side_coords {
                     let mut transformed_2d = self.custom_rotate(Vector2::new(pt_2d.0, pt_2d.1), angle_radians);
@@ -69,11 +71,6 @@ impl Tessellation {
 
                 // Order the data of the rotated connection side
                 self.order_data(&mut vec);
-
-                println!("");
-                println!("main_border: {:?}", main_border);
-                println!("");
-                println!("vec: {:?}", vec);
 
                 // Calculate shifts
                 let shift_x_coordinates = main_border[0].x - vec[0].x;
@@ -142,8 +139,8 @@ impl Tessellation {
     }
 
     pub fn calculate_angle(&self, border1: &[Vector2<f64>], border2: &[Vector2<f64>]) -> f64 {
-        let dir1 = self.fit_line(border1);
-        let dir2 = self.fit_line(border2);
+        let dir1 = self.fit_line(border2);
+        let dir2 = self.fit_line(border1);
 
         let dot = dir1.dot(&dir2);
         let det = dir1.x * dir2.y - dir1.y * dir2.x;
