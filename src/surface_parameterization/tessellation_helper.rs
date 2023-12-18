@@ -77,16 +77,12 @@ impl Tessellation {
                 // Order the data of the rotated connection side
                 self.order_data(&mut vec);
 
-                // Transform vec into a DMatrix
-                let connection_matrix: DMatrix<f64> = DMatrix::from_iterator(
-                    vec.len(),
-                    2,
-                    vec.into_iter().flat_map(|v| vec![v.x, v.y]),
-                );
-
                 // Calculate shifts
-                let shift_x_coordinates = main_border_matrix[(0, 0)] - connection_matrix[(0, 0)];
-                let shift_y_coordinates = main_border_matrix[(0, 1)] - connection_matrix[(0, 1)];
+                let shift_x_coordinates = main_border_matrix[(0, 0)] - vec[0].x;
+                let shift_y_coordinates = main_border_matrix[(0, 1)] - vec[0].y;
+
+                println!("shift_x_coordinates: {}", shift_x_coordinates);
+                println!("shift_y_coordinates: {}", shift_y_coordinates);
 
                 for v in mesh.vertex_iter() {
                     let pt_3d = mesh.position(v);
