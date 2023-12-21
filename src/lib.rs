@@ -128,15 +128,15 @@ pub fn create_uv_surface() {
 
         let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
         tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
-
-        // TODO: this is only a hack: set mesh_tex_coords.get_tex_coord(vertex_id) to uv_mesh.position(vertex_id)
-        for vertex_id in uv_mesh.vertex_iter() {
-            mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(uv_mesh.position(vertex_id).x, uv_mesh.position(vertex_id).y));
-        }
-        io::save_uv_mesh_as_obj(&uv_mesh, &mesh_tex_coords, save_path_uv2.clone())
-            .expect("Failed to save mesh to file");
         log::info!("docking_side: {}", docking_side);
-        // tessellation.add_mesh(&mut uv_mesh, &mut uv_mesh_centre, docking_side);
+        tessellation.add_mesh(&mut uv_mesh, &mut uv_mesh_centre, docking_side);
+
+        for vertex_id in uv_mesh_centre.vertex_iter() {
+            mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(uv_mesh_centre.position(vertex_id).x, uv_mesh_centre.position(vertex_id).y));
+        }
+        io::save_uv_mesh_as_obj(&uv_mesh_centre, &mesh_tex_coords, save_path_uv2.clone())
+            .expect("Failed to save mesh to file");
+
     }
 }
 
@@ -268,6 +268,7 @@ pub fn greet() {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use tri_mesh::vec3;
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
@@ -310,6 +311,19 @@ mod tests {
         if let Some(position) = boundary_vertices.iter().position(|&v| v == start_vertex) {
             boundary_vertices.rotate_left(position);
         }
+    }
+
+    #[test]
+    fn test_dep_mesh_library() {
+        let mesh = Mesh::new(&three_d_asset::TriMesh {
+                positions: three_d_asset::Positions::F64(vec![vec3(0.0, 2.0, 1.0), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0)]),
+                ..Default::default()
+            });
+
+        // Save the mesh to file
+        let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
+        let save_path = mesh_cartography_lib_dir.join("test_triangle.obj");
+        io::save_mesh_as_obj(&mesh, save_path).expect("Failed to save mesh to file");
     }
 
     #[test]
