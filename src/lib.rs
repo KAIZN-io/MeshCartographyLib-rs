@@ -9,15 +9,16 @@
 //! ## Current Status
 //!
 //! - **Bugs:** -
-//! - **Todo:** -
+//! - **Todo:** - Tessellation doesnt work yet
 
 // Import necessary modules and types
 use wasm_bindgen::prelude::*;
 use std::env;
 use std::path::PathBuf;
-use tri_mesh::{Mesh, VertexID};
+use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
+use nalgebra::{Vector2, Matrix2, SVD};
 
 mod mesh_definition;
 use crate::mesh_definition::TexCoord;
@@ -35,6 +36,7 @@ mod surface_parameterization {
     pub mod boundary_matrix;
     pub mod laplacian_matrix;
     pub mod harmonic_parameterization_helper;
+    pub mod tessellation_helper;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -57,6 +59,46 @@ fn get_mesh_cartography_lib_dir() -> PathBuf {
     PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
 }
 
+pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>>) -> Mesh {
+    // Flatten the Vec<Vec<Vector3<f64>>> to Vec<Vector3<f64>>
+    let combined_vertices: Vec<Vector3<f64>> = grouped_vertices.into_iter().flatten().collect();
+
+    // Remove duplicate vertices
+    let mut unique_vertices = Vec::new();
+    let mut index_map = HashMap::new();
+    for (original_index, v) in combined_vertices.iter().enumerate() {
+        let new_index = unique_vertices.iter().position(|&x| x == *v);
+        match new_index {
+            Some(index) => {
+                // Vertex is a duplicate, map to existing index
+                index_map.insert(original_index, index);
+            },
+            None => {
+                // Vertex is unique, add to unique_vertices and map to its new index
+                unique_vertices.push(*v);
+                index_map.insert(original_index, unique_vertices.len() - 1);
+            }
+        }
+    }
+
+    // Create the face indices
+    let mut face_indices = Vec::new();
+    for (original_index, _) in combined_vertices.iter().enumerate().step_by(3) {
+        if original_index + 2 < combined_vertices.len() {
+            if let (Some(&a), Some(&b), Some(&c)) = (index_map.get(&original_index), index_map.get(&(original_index + 1)), index_map.get(&(original_index + 2))) {
+                face_indices.extend_from_slice(&[a as u32, b as u32, c as u32]);
+            }
+        }
+    }
+
+    // Create the mesh
+    Mesh::new(&three_d_asset::TriMesh {
+        positions: three_d_asset::Positions::F64(unique_vertices),
+        indices: three_d_asset::Indices::U32(face_indices),
+        ..Default::default()
+    })
+}
+
 // Function to create UV surface
 #[wasm_bindgen]
 pub fn create_uv_surface() {
@@ -72,7 +114,7 @@ pub fn create_uv_surface() {
 
     // io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
-    let (_boundary_vertices, mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
+    let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
 
     io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
         .expect("Failed to save mesh to file");
@@ -95,6 +137,55 @@ pub fn create_uv_surface() {
     let length_distortion_helper = mesh_metric::length_distortion_helper::LengthDistortionHelper::new(&surface_mesh, &uv_mesh);
     let length_distortion = length_distortion_helper.compute_length_distortion();
     log::info!("Length distortion: {}", length_distortion);
+
+
+
+    // Create the Kachelmuster with Heesch numbers
+    let mut uv_mesh_centre = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+
+    let (border_v_map, border_map) = monotile_border::get_sub_borders(&boundary_vertices, &mesh_tex_coords);
+    let save_path_uv2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv_tessellation.obj");
+
+    let mut grouped_face_vertices = Vec::new();
+    crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
+
+    let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
+    let size = border_map.len();
+    for i in 0..size {
+        let docking_side: usize = i;
+        let next_index = (i + 1) % size;
+
+        // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&next_index]
+        let border1: Vec<Vector2<f64>> = border_map[&next_index]
+            .iter()
+            .map(|coord| Vector2::new(coord.0, coord.1))
+            .collect();
+
+        // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&i]
+        let border2: Vec<Vector2<f64>> = border_map[&i]
+            .iter()
+            .map(|coord| Vector2::new(coord.0, coord.1))
+            .collect();
+
+        let rotation_angle = tessellation.calculate_angle(&border1, &border2);
+
+        let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+        tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
+        log::info!("docking_side: {}", docking_side);
+
+        // Get the face vertices coordinates
+        crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh, &mut grouped_face_vertices);
+    }
+
+    // Add the meshes together
+    let tessellation_mesh = create_mesh_from_grouped_vertices(grouped_face_vertices);
+
+    // Save the mesh
+    for vertex_id in tessellation_mesh.vertex_iter() {
+        mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tessellation_mesh.position(vertex_id).x, tessellation_mesh.position(vertex_id).y));
+    }
+    io::save_uv_mesh_as_obj(&tessellation_mesh, &mesh_tex_coords, save_path_uv2.clone())
+        .expect("Failed to save mesh to file");
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
@@ -225,6 +316,9 @@ pub fn greet() {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use tri_mesh::vec3;
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
@@ -267,6 +361,58 @@ mod tests {
         if let Some(position) = boundary_vertices.iter().position(|&v| v == start_vertex) {
             boundary_vertices.rotate_left(position);
         }
+    }
+
+    #[test]
+    fn test_dep_mesh_library() {
+        // Combine the two vectors into one
+        let combined_vertices = vec![
+            vec3(0.0, 2.0, 1.0),
+            vec3(1.0, 0.0, 0.0),
+            vec3(0.0, 0.0, 1.0)
+        ];
+
+        let mesh = Mesh::new(&three_d_asset::TriMesh {
+            positions: three_d_asset::Positions::F64(combined_vertices),
+            ..Default::default()
+        });
+
+        assert_eq!(mesh.no_vertices(), 3);
+        assert_eq!(mesh.no_faces(), 1);
+
+        // Save the mesh to file
+        let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
+        let save_path = mesh_cartography_lib_dir.join("test_triangle.obj");
+        io::save_mesh_as_obj(&mesh, save_path).expect("Failed to save mesh to file");
+    }
+
+    #[test]
+    fn test_create_mesh() {
+        let grouped_verts = vec![
+            vec![vec3(0.0, 2.0, 1.0), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0)],
+            vec![vec3(0.0, 1.0, 2.0), vec3(0.0, 2.0, 1.0), vec3(2.0, 0.0, 1.0)],
+        ];
+
+        let mesh = create_mesh_from_grouped_vertices(grouped_verts);
+        assert_eq!(mesh.no_vertices(), 5);
+        assert_eq!(mesh.no_faces(), 2);
+
+        // Save the mesh to file
+        let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
+        let save_path = mesh_cartography_lib_dir.join("test_mesh.obj");
+        io::save_mesh_as_obj(&mesh, save_path).expect("Failed to save mesh");
+    }
+
+    #[test]
+    fn test_mesh_with_non_overlapping_vertices() {
+        let grouped_verts = vec![
+            vec![vec3(1.0, 2.0, 3.0), vec3(3.0, 2.0, 1.0), vec3(2.0, 3.0, 1.0)],
+            vec![vec3(4.0, 5.0, 6.0), vec3(6.0, 5.0, 4.0), vec3(5.0, 4.0, 6.0)],
+        ];
+
+        let mesh = create_mesh_from_grouped_vertices(grouped_verts);
+        assert_eq!(mesh.no_vertices(), 6);
+        assert_eq!(mesh.no_faces(), 2);
     }
 
     #[test]

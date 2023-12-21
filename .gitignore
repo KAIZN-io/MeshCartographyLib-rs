@@ -49,4 +49,5 @@ cmake_install.cmake
 vscode.yaml
 /target
 
-*_uv.obj
+*_uv*.obj
+test_*.obj
