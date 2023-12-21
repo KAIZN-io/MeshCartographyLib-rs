@@ -15,7 +15,7 @@
 use wasm_bindgen::prelude::*;
 use std::env;
 use std::path::PathBuf;
-use tri_mesh::{Mesh, VertexID};
+use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use nalgebra::{Vector2, Matrix2, SVD};
@@ -57,6 +57,46 @@ impl Hash for VertexPosition {
 
 fn get_mesh_cartography_lib_dir() -> PathBuf {
     PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
+}
+
+pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>>) -> Mesh {
+    // Flatten the Vec<Vec<Vector3<f64>>> to Vec<Vector3<f64>>
+    let combined_vertices: Vec<Vector3<f64>> = grouped_vertices.into_iter().flatten().collect();
+
+    // Remove duplicate vertices
+    let mut unique_vertices = Vec::new();
+    let mut index_map = HashMap::new();
+    for (original_index, v) in combined_vertices.iter().enumerate() {
+        let new_index = unique_vertices.iter().position(|&x| x == *v);
+        match new_index {
+            Some(index) => {
+                // Vertex is a duplicate, map to existing index
+                index_map.insert(original_index, index);
+            },
+            None => {
+                // Vertex is unique, add to unique_vertices and map to its new index
+                unique_vertices.push(*v);
+                index_map.insert(original_index, unique_vertices.len() - 1);
+            }
+        }
+    }
+
+    // Create the face indices
+    let mut face_indices = Vec::new();
+    for (original_index, _) in combined_vertices.iter().enumerate().step_by(3) {
+        if original_index + 2 < combined_vertices.len() {
+            if let (Some(&a), Some(&b), Some(&c)) = (index_map.get(&original_index), index_map.get(&(original_index + 1)), index_map.get(&(original_index + 2))) {
+                face_indices.extend_from_slice(&[a as u32, b as u32, c as u32]);
+            }
+        }
+    }
+
+    // Create the mesh
+    Mesh::new(&three_d_asset::TriMesh {
+        positions: three_d_asset::Positions::F64(unique_vertices),
+        indices: three_d_asset::Indices::U32(face_indices),
+        ..Default::default()
+    })
 }
 
 // Function to create UV surface
@@ -271,7 +311,6 @@ mod tests {
     use tri_mesh::vec3;
     use std::collections::HashSet;
     use std::iter::FromIterator;
-    use tri_mesh::Vector3;
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
@@ -340,51 +379,13 @@ mod tests {
     }
 
     #[test]
-    fn test_mesh_creation() {
-        // Collect all face vertices
-        let grouped_vertices = vec![
+    fn test_create_mesh() {
+        let grouped_verts = vec![
             vec![vec3(0.0, 2.0, 1.0), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0)],
             vec![vec3(0.0, 1.0, 2.0), vec3(0.0, 2.0, 1.0), vec3(2.0, 0.0, 1.0)],
         ];
 
-        // Flatten the Vec<Vec<Vector3<f64>>> to Vec<Vector3<f64>>
-        let combined_vertices: Vec<Vector3<f64>> = grouped_vertices.into_iter().flatten().collect();
-
-        // Remove duplicate vertices
-        let mut unique_vertices = Vec::new();
-        let mut index_map = HashMap::new();
-        for (original_index, v) in combined_vertices.iter().enumerate() {
-            let new_index = unique_vertices.iter().position(|&x| x == *v);
-            match new_index {
-                Some(index) => {
-                    // Vertex is a duplicate, map to existing index
-                    index_map.insert(original_index, index);
-                },
-                None => {
-                    // Vertex is unique, add to unique_vertices and map to its new index
-                    unique_vertices.push(*v);
-                    index_map.insert(original_index, unique_vertices.len() - 1);
-                }
-            }
-        }
-
-        // Create the face indices
-        let mut face_indices = Vec::new();
-        for (original_index, _) in combined_vertices.iter().enumerate().step_by(3) {
-            if original_index + 2 < combined_vertices.len() {
-                if let (Some(&a), Some(&b), Some(&c)) = (index_map.get(&original_index), index_map.get(&(original_index + 1)), index_map.get(&(original_index + 2))) {
-                    face_indices.extend_from_slice(&[a as u32, b as u32, c as u32]);
-                }
-            }
-        }
-
-        // Create the mesh
-        let mesh = Mesh::new(&three_d_asset::TriMesh {
-            positions: three_d_asset::Positions::F64(unique_vertices),
-            indices: three_d_asset::Indices::U32(face_indices),
-            ..Default::default()
-        });
-
+        let mesh = create_mesh_from_grouped_vertices(grouped_verts);
         assert_eq!(mesh.no_vertices(), 5);
         assert_eq!(mesh.no_faces(), 2);
 
