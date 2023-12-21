@@ -144,7 +144,26 @@ pub fn create_uv_surface() {
     let mut uv_mesh_centre = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
 
     let (border_v_map, border_map) = monotile_border::get_sub_borders(&boundary_vertices, &mesh_tex_coords);
-    let save_path_uv2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv2.obj");
+    let save_path_uv2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv_tessellation.obj");
+
+    let mut grouped_face_vertices = Vec::new();
+    for face_id in uv_mesh_centre.face_iter() {
+        let (vertex1, vertex2, vertex3) = uv_mesh_centre.face_vertices(face_id);
+
+        // Collecting vertices of the face into a Vec<Vector3<f64>>
+        let mut face_vertex_coords = Vec::new();
+
+        // get the position of the vertices and push it to the face_vertex_coords
+        let face_verts = vec![vertex1, vertex2, vertex3];
+        for vertex_id in face_verts.iter() {
+            let vertex = uv_mesh_centre.position(*vertex_id);
+            face_vertex_coords.push(vertex);
+        }
+
+        // Add the collected vertices of the face to the grouped_face_vertices
+        grouped_face_vertices.push(face_vertex_coords);
+    }
+
 
     let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
     let size = border_map.len();
@@ -169,15 +188,36 @@ pub fn create_uv_surface() {
         let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
         tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
         log::info!("docking_side: {}", docking_side);
-        tessellation.add_mesh(&mut uv_mesh, &mut uv_mesh_centre, docking_side);
 
-        for vertex_id in uv_mesh_centre.vertex_iter() {
-            mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(uv_mesh_centre.position(vertex_id).x, uv_mesh_centre.position(vertex_id).y));
+        // ! todo: refactor this by creating a function out of it
+        // Get the face vertices coordinates
+        for face_id in uv_mesh.face_iter() {
+            let (vertex1, vertex2, vertex3) = uv_mesh.face_vertices(face_id);
+
+            // Collecting vertices of the face into a Vec<Vector3<f64>>
+            let mut face_vertex_coords = Vec::new();
+
+            // get the position of the vertices and push it to the face_vertex_coords
+            let face_verts = vec![vertex1, vertex2, vertex3];
+            for vertex_id in face_verts.iter() {
+                let vertex = uv_mesh.position(*vertex_id);
+                face_vertex_coords.push(vertex);
+            }
+
+            // Add the collected vertices of the face to the grouped_face_vertices
+            grouped_face_vertices.push(face_vertex_coords);
         }
-        io::save_uv_mesh_as_obj(&uv_mesh_centre, &mesh_tex_coords, save_path_uv2.clone())
-            .expect("Failed to save mesh to file");
-
     }
+
+    // Add the meshes together
+    let tessellation_mesh = create_mesh_from_grouped_vertices(grouped_face_vertices);
+
+    // Save the mesh
+    for vertex_id in tessellation_mesh.vertex_iter() {
+        mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tessellation_mesh.position(vertex_id).x, tessellation_mesh.position(vertex_id).y));
+    }
+    io::save_uv_mesh_as_obj(&tessellation_mesh, &mesh_tex_coords, save_path_uv2.clone())
+        .expect("Failed to save mesh to file");
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
@@ -395,6 +435,17 @@ mod tests {
         io::save_mesh_as_obj(&mesh, save_path).expect("Failed to save mesh");
     }
 
+    #[test]
+    fn test_mesh_with_non_overlapping_vertices() {
+        let grouped_verts = vec![
+            vec![vec3(1.0, 2.0, 3.0), vec3(3.0, 2.0, 1.0), vec3(2.0, 3.0, 1.0)],
+            vec![vec3(4.0, 5.0, 6.0), vec3(6.0, 5.0, 4.0), vec3(5.0, 4.0, 6.0)],
+        ];
+
+        let mesh = create_mesh_from_grouped_vertices(grouped_verts);
+        assert_eq!(mesh.no_vertices(), 6);
+        assert_eq!(mesh.no_faces(), 2);
+    }
 
     #[test]
     fn test_get_cutline_ends() {
