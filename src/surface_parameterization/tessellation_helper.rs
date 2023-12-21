@@ -14,7 +14,7 @@
 use crate::mesh_definition;
 use crate::mesh_definition::TexCoord;
 use std::collections::HashMap;
-use tri_mesh::{Mesh, VertexID};
+use tri_mesh::{Mesh, VertexID, Vector3};
 use nalgebra::{DMatrix, DVector, Vector2, Matrix2, SVD};
 
 // ! MOVE it to the monotile_border module
@@ -27,6 +27,18 @@ fn create_twin_border_map(corner_count: usize, current_border: usize) -> HashMap
     }
 
     twin_border_map
+}
+
+pub fn collect_face_vertices(mesh: &Mesh, grouped_face_vertices: &mut Vec<Vec<Vector3<f64>>>) {
+    for face_id in mesh.face_iter() {
+        let (vertex1, vertex2, vertex3) = mesh.face_vertices(face_id);
+        let mut face_vertex_coords = vec![
+            mesh.position(vertex1),
+            mesh.position(vertex2),
+            mesh.position(vertex3),
+        ];
+        grouped_face_vertices.push(face_vertex_coords);
+    }
 }
 
 pub struct Tessellation {
@@ -93,71 +105,6 @@ impl Tessellation {
         } else {
             panic!("The docking side {} is not found in border_map", docking_side);
         }
-    }
-
-    pub fn add_mesh(&mut self, mesh: &mut Mesh, mesh_original: &mut Mesh, docking_side: usize) {
-        // A map to relate old vertex IDs in `mesh` to new ones in `mesh_original`
-        let mut reindexed_vertices: HashMap<VertexID, VertexID> = HashMap::new();
-
-        let current_border = 3;
-        let corner_count = 4;
-        let twin_border_map = create_twin_border_map(corner_count, current_border);
-
-        let mut shifted_v: VertexID;
-        for v in mesh.vertex_iter() {
-            // let kachelmuster_twin_v = &mut self.equivalent_vertices[v.idx()];  // ! Fix this
-
-            let border_list = &self.border_v_map[&twin_border_map[&docking_side]];
-
-            let mut pt_3d = tri_mesh::vec3(0.0, 0.0, 0.0);
-            if let Some(index) = border_list.iter().position(|&vertex| vertex == v) {
-                pt_3d = mesh.position(border_list[index]);
-            } else {
-                pt_3d = mesh.position(v);
-            }
-
-            // Check if the vertex already exists in the mesh
-            let existing_v = self.find_vertex_by_coordinates(mesh_original, pt_3d);
-
-            match existing_v {
-                Some(vertex) => {
-                    // Vertex already exists in the mesh
-                    shifted_v = vertex;
-                },
-                None => {
-                    // Vertex does not exist, add it to the mesh
-                    shifted_v = mesh_original.add_vertex(pt_3d);
-                    // kachelmuster_twin_v.push(shifted_v); // Assuming `kachelmuster_twin_v` is a Vec<VertexID>
-                },
-            }
-
-            reindexed_vertices.insert(v, shifted_v);
-        }
-
-        println!("border_v_map: {:?}", self.border_v_map.len());
-        println!("number of vertices in mesh: {:?}", mesh_original.no_vertices());
-        println!("monotile_border_v: {:?}", self.monotile_border_v);
-
-        // ! Todo: Connecting the vertices is not working yet
-        // ! Warum ist das nämlich soooo langsam??
-        // Add faces from the rotated mesh to the original mesh
-        // for face in mesh.face_iter() {
-        //     let (vertex1, vertex2, vertex3) = mesh.face_vertices(face);
-
-        //     // Get what the old vertex IDs are in the original mesh, which consists now of all the Tessellation vertices
-        //     let v1: VertexID = reindexed_vertices[&vertex1];
-        //     let v2: VertexID = reindexed_vertices[&vertex2];
-        //     let v3: VertexID = reindexed_vertices[&vertex3];
-
-        //     // println!("vertex1 {:?} -> {:?}", vertex1, v1);
-        //     // println!("vertex2 {:?} -> {:?}", vertex2, v2);
-        //     // println!("vertex3 {:?} -> {:?}", vertex3, v3);
-
-
-        //     println!("v1: {:?}, v2: {:?}, v3: {:?}", mesh_original.position(v1), mesh_original.position(v2), mesh_original.position(v3));
-
-        //     mesh_original.add_face(v1, v2, v3);
-        // }
     }
 
     pub fn calculate_angle(&self, border1: &[Vector2<f64>], border2: &[Vector2<f64>]) -> f64 {
