@@ -269,6 +269,9 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use tri_mesh::vec3;
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
+    use tri_mesh::Vector3;
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
@@ -336,10 +339,6 @@ mod tests {
         io::save_mesh_as_obj(&mesh, save_path).expect("Failed to save mesh to file");
     }
 
-    use std::collections::HashSet;
-    use std::iter::FromIterator;
-    use tri_mesh::Vector3;
-
     #[test]
     fn test_mesh_creation() {
         // Collect all face vertices
@@ -351,17 +350,25 @@ mod tests {
         // Flatten the Vec<Vec<Vector3<f64>>> to Vec<Vector3<f64>>
         let combined_vertices: Vec<Vector3<f64>> = grouped_vertices.into_iter().flatten().collect();
 
-        // Remove vertex duplicates
+        // Remove duplicate vertices
         let mut unique_vertices = Vec::new();
         let mut index_map = HashMap::new();
         for (original_index, v) in combined_vertices.iter().enumerate() {
-            if !unique_vertices.contains(v) {
-                unique_vertices.push(*v);
-                index_map.insert(original_index, unique_vertices.len() - 1);
+            let new_index = unique_vertices.iter().position(|&x| x == *v);
+            match new_index {
+                Some(index) => {
+                    // Vertex is a duplicate, map to existing index
+                    index_map.insert(original_index, index);
+                },
+                None => {
+                    // Vertex is unique, add to unique_vertices and map to its new index
+                    unique_vertices.push(*v);
+                    index_map.insert(original_index, unique_vertices.len() - 1);
+                }
             }
         }
 
-        // Create faces using mod 3
+        // Create the face indices
         let mut face_indices = Vec::new();
         for (original_index, _) in combined_vertices.iter().enumerate().step_by(3) {
             if original_index + 2 < combined_vertices.len() {
@@ -379,7 +386,7 @@ mod tests {
         });
 
         assert_eq!(mesh.no_vertices(), 5);
-        // assert_eq!(mesh.no_faces(), 2);
+        assert_eq!(mesh.no_faces(), 2);
 
         // Save the mesh to file
         let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
