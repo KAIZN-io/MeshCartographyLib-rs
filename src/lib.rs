@@ -315,16 +315,78 @@ mod tests {
 
     #[test]
     fn test_dep_mesh_library() {
+        // Combine the two vectors into one
+        let combined_vertices = vec![
+            vec3(0.0, 2.0, 1.0),
+            vec3(1.0, 0.0, 0.0),
+            vec3(0.0, 0.0, 1.0)
+        ];
+
         let mesh = Mesh::new(&three_d_asset::TriMesh {
-                positions: three_d_asset::Positions::F64(vec![vec3(0.0, 2.0, 1.0), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0)]),
-                ..Default::default()
-            });
+            positions: three_d_asset::Positions::F64(combined_vertices),
+            ..Default::default()
+        });
+
+        assert_eq!(mesh.no_vertices(), 3);
+        assert_eq!(mesh.no_faces(), 1);
 
         // Save the mesh to file
         let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
         let save_path = mesh_cartography_lib_dir.join("test_triangle.obj");
         io::save_mesh_as_obj(&mesh, save_path).expect("Failed to save mesh to file");
     }
+
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
+    use tri_mesh::Vector3;
+
+    #[test]
+    fn test_mesh_creation() {
+        // Collect all face vertices
+        let grouped_vertices = vec![
+            vec![vec3(0.0, 2.0, 1.0), vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0)],
+            vec![vec3(0.0, 1.0, 2.0), vec3(0.0, 2.0, 1.0), vec3(2.0, 0.0, 1.0)],
+        ];
+
+        // Flatten the Vec<Vec<Vector3<f64>>> to Vec<Vector3<f64>>
+        let combined_vertices: Vec<Vector3<f64>> = grouped_vertices.into_iter().flatten().collect();
+
+        // Remove vertex duplicates
+        let mut unique_vertices = Vec::new();
+        let mut index_map = HashMap::new();
+        for (original_index, v) in combined_vertices.iter().enumerate() {
+            if !unique_vertices.contains(v) {
+                unique_vertices.push(*v);
+                index_map.insert(original_index, unique_vertices.len() - 1);
+            }
+        }
+
+        // Create faces using mod 3
+        let mut face_indices = Vec::new();
+        for (original_index, _) in combined_vertices.iter().enumerate().step_by(3) {
+            if original_index + 2 < combined_vertices.len() {
+                if let (Some(&a), Some(&b), Some(&c)) = (index_map.get(&original_index), index_map.get(&(original_index + 1)), index_map.get(&(original_index + 2))) {
+                    face_indices.extend_from_slice(&[a as u32, b as u32, c as u32]);
+                }
+            }
+        }
+
+        // Create the mesh
+        let mesh = Mesh::new(&three_d_asset::TriMesh {
+            positions: three_d_asset::Positions::F64(unique_vertices),
+            indices: three_d_asset::Indices::U32(face_indices),
+            ..Default::default()
+        });
+
+        assert_eq!(mesh.no_vertices(), 5);
+        // assert_eq!(mesh.no_faces(), 2);
+
+        // Save the mesh to file
+        let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
+        let save_path = mesh_cartography_lib_dir.join("test_mesh.obj");
+        io::save_mesh_as_obj(&mesh, save_path).expect("Failed to save mesh");
+    }
+
 
     #[test]
     fn test_get_cutline_ends() {
