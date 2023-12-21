@@ -36,6 +36,21 @@ impl MeshAnalysis {
         curvatures
     }
 
+    pub fn vertex_with_highest_curvature(&self) -> VertexID {
+        let curvatures = self.calculate_gaussian_curvature();
+        let mut max_curvature = f64::MIN;
+        let mut vertex_id_with_max_curvature = self.mesh.vertex_iter().next().unwrap();
+
+        for (i, &curvature) in curvatures.iter().enumerate() {
+            if curvature > max_curvature {
+                max_curvature = curvature;
+                vertex_id_with_max_curvature = self.mesh.vertex_iter().nth(i).unwrap();
+            }
+        }
+
+        vertex_id_with_max_curvature
+    }
+
     fn face_contains_vertex(&self, face_id: FaceID, vertex_id: VertexID) -> bool {
         let (v1, v2, v3) = self.mesh.face_vertices(face_id);
         [v1, v2, v3].contains(&vertex_id)
