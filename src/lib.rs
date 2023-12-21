@@ -99,6 +99,18 @@ pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>
     })
 }
 
+fn collect_face_vertices(mesh: &Mesh, grouped_face_vertices: &mut Vec<Vec<Vector3<f64>>>) {
+    for face_id in mesh.face_iter() {
+        let (vertex1, vertex2, vertex3) = mesh.face_vertices(face_id);
+        let mut face_vertex_coords = vec![
+            mesh.position(vertex1),
+            mesh.position(vertex2),
+            mesh.position(vertex3),
+        ];
+        grouped_face_vertices.push(face_vertex_coords);
+    }
+}
+
 // Function to create UV surface
 #[wasm_bindgen]
 pub fn create_uv_surface() {
@@ -147,23 +159,7 @@ pub fn create_uv_surface() {
     let save_path_uv2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv_tessellation.obj");
 
     let mut grouped_face_vertices = Vec::new();
-    for face_id in uv_mesh_centre.face_iter() {
-        let (vertex1, vertex2, vertex3) = uv_mesh_centre.face_vertices(face_id);
-
-        // Collecting vertices of the face into a Vec<Vector3<f64>>
-        let mut face_vertex_coords = Vec::new();
-
-        // get the position of the vertices and push it to the face_vertex_coords
-        let face_verts = vec![vertex1, vertex2, vertex3];
-        for vertex_id in face_verts.iter() {
-            let vertex = uv_mesh_centre.position(*vertex_id);
-            face_vertex_coords.push(vertex);
-        }
-
-        // Add the collected vertices of the face to the grouped_face_vertices
-        grouped_face_vertices.push(face_vertex_coords);
-    }
-
+    collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
 
     let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
     let size = border_map.len();
@@ -189,24 +185,8 @@ pub fn create_uv_surface() {
         tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
         log::info!("docking_side: {}", docking_side);
 
-        // ! todo: refactor this by creating a function out of it
         // Get the face vertices coordinates
-        for face_id in uv_mesh.face_iter() {
-            let (vertex1, vertex2, vertex3) = uv_mesh.face_vertices(face_id);
-
-            // Collecting vertices of the face into a Vec<Vector3<f64>>
-            let mut face_vertex_coords = Vec::new();
-
-            // get the position of the vertices and push it to the face_vertex_coords
-            let face_verts = vec![vertex1, vertex2, vertex3];
-            for vertex_id in face_verts.iter() {
-                let vertex = uv_mesh.position(*vertex_id);
-                face_vertex_coords.push(vertex);
-            }
-
-            // Add the collected vertices of the face to the grouped_face_vertices
-            grouped_face_vertices.push(face_vertex_coords);
-        }
+        collect_face_vertices(&uv_mesh, &mut grouped_face_vertices);
     }
 
     // Add the meshes together
