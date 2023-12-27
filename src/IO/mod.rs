@@ -181,6 +181,14 @@ pub fn load_test_mesh() -> Mesh {
 }
 
 #[allow(dead_code)]
+pub fn load_test_mesh_closed() -> Mesh {
+    let mesh_cartography_lib_dir_str = env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set");
+    let mesh_cartography_lib_dir = PathBuf::from(mesh_cartography_lib_dir_str);
+    let new_path = mesh_cartography_lib_dir.join("ellipsoid_x4.obj");
+    load_mesh_from_obj(new_path).unwrap()
+}
+
+#[allow(dead_code)]
 pub fn load_sparse_csv_data_to_csr_matrix(file_path: &str) -> std::result::Result<CsrMatrix<f64>, Box<dyn Error>> {
     let mut reader = ReaderBuilder::new().has_headers(false).from_path(file_path)?;
 
