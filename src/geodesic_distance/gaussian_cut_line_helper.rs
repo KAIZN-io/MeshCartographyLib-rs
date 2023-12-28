@@ -51,6 +51,34 @@ impl MeshAnalysis {
         vertex_id_with_max_curvature
     }
 
+    pub fn vertex_with_second_highest_curvature(&self) -> VertexID {
+        let curvatures = self.calculate_gaussian_curvature();
+        let mut max_curvature = f64::MIN;
+        let mut second_max_curvature = f64::MIN;
+        let mut vertex_id_with_max_curvature = self.mesh.vertex_iter().next().unwrap();
+        let mut vertex_id_with_second_max_curvature = self.mesh.vertex_iter().next().unwrap();
+
+        for (i, &curvature) in curvatures.iter().enumerate() {
+            let current_vertex_id = self.mesh.vertex_iter().nth(i).unwrap();
+
+            if curvature > max_curvature {
+                // Update second highest before updating the highest
+                second_max_curvature = max_curvature;
+                vertex_id_with_second_max_curvature = vertex_id_with_max_curvature;
+
+                // Update the highest
+                max_curvature = curvature;
+                vertex_id_with_max_curvature = current_vertex_id;
+            } else if curvature > second_max_curvature {
+                // Update the second highest
+                second_max_curvature = curvature;
+                vertex_id_with_second_max_curvature = current_vertex_id;
+            }
+        }
+
+        vertex_id_with_second_max_curvature
+    }
+
     fn face_contains_vertex(&self, face_id: FaceID, vertex_id: VertexID) -> bool {
         let (v1, v2, v3) = self.mesh.face_vertices(face_id);
         [v1, v2, v3].contains(&vertex_id)
@@ -102,6 +130,9 @@ mod tests {
     use crate::io;
     use nalgebra as na;
     use tri_mesh::Vec3;
+    use petgraph::graph::Graph;
+    use petgraph::algo::dijkstra;
+    use petgraph::prelude::*;
 
     #[test]
     fn test_calculate_angles_for_known_triangle() {
@@ -211,7 +242,55 @@ mod tests {
         let mesh = io::load_test_mesh_closed();
         let mesh_analysis = super::MeshAnalysis::new(mesh);
         let vertex_id = mesh_analysis.vertex_with_highest_curvature();
+        let second_highest = mesh_analysis.vertex_with_second_highest_curvature();
 
         println!("Vertex {:?} has highest curvature", mesh_analysis.mesh.position(vertex_id));
+        println!("Vertex {:?} has second highest curvature", mesh_analysis.mesh.position(second_highest));
+
+        // Create a graph representation of the mesh
+        let mut graph = Graph::<(), f32, Undirected>::new_undirected();
+
+        // Map from mesh vertex indices to graph node indices
+        let mut node_indices = Vec::new();
+
+        // Add vertices to the graph
+        for _ in 0..mesh_analysis.mesh.no_vertices() {
+            node_indices.push(graph.add_node(()));
+        }
+
+        // Add edges to the graph
+        for edge in mesh_analysis.mesh.edge_iter() {
+            let (start, end) = mesh_analysis.mesh.edge_vertices(edge);
+
+            let index_as_u32: u32 = *start;
+            let index_as_usize: usize = index_as_u32 as usize;
+            let start_idx = node_indices[index_as_usize];
+
+            let index_as_u32: u32 = *end;
+            let index_as_usize: usize = index_as_u32 as usize;
+            let end_idx = node_indices[index_as_usize];
+            let weight = 1.0;
+
+            graph.add_edge(start_idx, end_idx, weight);
+        }
+
+        // Convert mesh vertex indices to graph node indices
+        let index_as_u32: u32 = *vertex_id;
+        let index_as_usize: usize = index_as_u32 as usize;
+        let start_node = node_indices[index_as_usize];
+
+        let index_as_u32: u32 = *second_highest;
+        let index_as_usize: usize = index_as_u32 as usize;
+        let end_node = node_indices[index_as_usize];
+
+        // Use Dijkstra's algorithm to find the shortest path
+        let path = dijkstra(&graph, start_node, Some(end_node), |e| *e.weight());
+
+        // The `path` variable now contains the shortest path between the two vertices
+        if let Some(path) = path.get(&end_node) {
+            println!("Shortest path length: {}", path);
+        } else {
+            println!("No path found between the vertices.");
+        }
     }
 }
