@@ -128,11 +128,8 @@ impl MeshAnalysis {
 #[cfg(test)]
 mod tests {
     use crate::io;
-    use nalgebra as na;
     use tri_mesh::Vec3;
-    use petgraph::graph::Graph;
-    use petgraph::algo::dijkstra;
-    use petgraph::prelude::*;
+    use pathfinding::prelude::dijkstra;
 
     #[test]
     fn test_calculate_angles_for_known_triangle() {
@@ -247,40 +244,38 @@ mod tests {
         println!("Vertex {:?} has highest curvature", mesh_analysis.mesh.position(vertex_id));
         println!("Vertex {:?} has second highest curvature", mesh_analysis.mesh.position(second_highest));
 
-        // Create a graph representation of the mesh
-        let mut graph = Graph::<(), f32, Undirected>::new_undirected();
+        let successors = |&node: &usize| -> Vec<(usize, i32)> {
+            mesh_analysis.mesh.edge_iter()
+                .filter_map(|edge| {
+                    let (start, end) = mesh_analysis.mesh.edge_vertices(edge);
 
-        // Map from mesh vertex indices to graph node indices
-        let mut node_indices = Vec::new();
+                    let start_idx = *start as usize;
+                    let end_idx = *end as usize;
 
-        // Add vertices to the graph
-        for _ in 0..mesh_analysis.mesh.no_vertices() {
-            node_indices.push(graph.add_node(()));
-        }
+                    if start_idx == node {
+                        Some((end_idx, 1))  // Assuming a weight of 1 for simplicity
+                    } else if end_idx == node {
+                        Some((start_idx, 1)) // Assuming a weight of 1 for simplicity
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
 
-        // Add edges to the graph
-        for edge in mesh_analysis.mesh.edge_iter() {
-            let (start, end) = mesh_analysis.mesh.edge_vertices(edge);
+        // Use Dijkstra's algorithm from the pathfinding crate
+        let start_node = *vertex_id as usize;
+        let end_node = *second_highest as usize;
+        let result = dijkstra(&start_node, successors, |&p| p == end_node);
 
-            let start_idx = node_indices[*start as usize];
-            let end_idx = node_indices[*end as usize];
-            let weight = 1.0;
-
-            graph.add_edge(start_idx, end_idx, weight);
-        }
-
-        // Convert mesh vertex indices to graph node indices
-        let start_node = node_indices[*vertex_id as usize];
-        let end_node = node_indices[*second_highest as usize];
-
-        // Use Dijkstra's algorithm to find the shortest path
-        let path = dijkstra(&graph, start_node, Some(end_node), |e| *e.weight());
-
-        // The `path` variable now contains the shortest path between the two vertices
-        if let Some(path) = path.get(&end_node) {
-            println!("Shortest path length: {}", path);
-        } else {
-            println!("No path found between the vertices.");
+        match result {
+            Some((path, cost)) => {
+                println!("Path found with cost {}: {:?}", cost, path);
+            }
+            None => {
+                println!("No path found between the vertices.");
+            }
         }
     }
+
 }
