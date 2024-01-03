@@ -268,10 +268,36 @@ mod tests {
         let end_node = *second_highest as usize;
         let result = dijkstra(&start_node, successors, |&p| p == end_node);
 
-        // // Iterate over the result and print each node of the path
-        // for v in result.unwrap().0 {
-        //     let v_coord = mesh_analysis.mesh.position(mesh_analysis.mesh.vertex_iter().nth(v).unwrap());
-        //     println!("{:?} {:?} {:?}", v_coord.x, v_coord.y, v_coord.z);
-        // }
+        // Check if a path was found
+        if let Some((path, _cost)) = result {
+            // Vector to store the edges
+            let mut edges = Vec::new();
+
+            // Iterate over the path to get each pair of vertices
+            for window in path.windows(2) {
+                if let [v1, v2] = *window {
+                    // Find the edge connecting v1 and v2
+                    let v1_id = mesh_analysis.mesh.vertex_iter().nth(v1).unwrap();
+                    let v2_id = mesh_analysis.mesh.vertex_iter().nth(v2).unwrap();
+                    let edge = mesh_analysis.mesh.connecting_edge(v1_id, v2_id);
+                    edges.push(edge);
+                }
+            }
+
+            const TWIN_EDGE_COUNT: usize = 2;
+            while edges.len() % TWIN_EDGE_COUNT != 0 {
+                edges.pop();
+            }
+
+            assert_eq!(edges.len() % TWIN_EDGE_COUNT, 0);
+            assert!(edges.len() > 0);
+
+            // // Now 'edges' contains the edges of the path
+            // for edge in edges {
+            //     println!("Edge: {:?}", edge);
+            // }
+        } else {
+            println!("No path found between the vertices.");
+        }
     }
 }
