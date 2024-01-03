@@ -268,14 +268,10 @@ mod tests {
         let end_node = *second_highest as usize;
         let result = dijkstra(&start_node, successors, |&p| p == end_node);
 
-        match result {
-            Some((path, cost)) => {
-                println!("Path found with cost {}: {:?}", cost, path);
-            }
-            None => {
-                println!("No path found between the vertices.");
-            }
-        }
+        // // Iterate over the result and print each node of the path
+        // for v in result.unwrap().0 {
+        //     let v_coord = mesh_analysis.mesh.position(mesh_analysis.mesh.vertex_iter().nth(v).unwrap());
+        //     println!("{:?} {:?} {:?}", v_coord.x, v_coord.y, v_coord.z);
+        // }
     }
-
 }
