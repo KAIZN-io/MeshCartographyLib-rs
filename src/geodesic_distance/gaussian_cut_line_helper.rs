@@ -1,5 +1,6 @@
 use tri_mesh::{Mesh, VertexID, FaceID, Vec3};
 use nalgebra as na;
+use pathfinding::prelude::dijkstra;
 
 pub struct MeshAnalysis {
     mesh: Mesh,
@@ -8,6 +9,64 @@ pub struct MeshAnalysis {
 impl MeshAnalysis {
     pub fn new(mesh: Mesh) -> Self {
         MeshAnalysis { mesh }
+    }
+
+    pub fn get_gaussian_cutline(&self) -> Vec<tri_mesh::HalfEdgeID> {
+        let vertex_id: VertexID = self.vertex_with_highest_curvature();
+        let second_highest = self.vertex_with_second_highest_curvature();
+
+        let successors = |&node: &usize| -> Vec<(usize, i32)> {
+            self.mesh.edge_iter()
+                .filter_map(|edge| {
+                    let (start, end) = self.mesh.edge_vertices(edge);
+
+                    let start_idx = *start as usize;
+                    let end_idx = *end as usize;
+
+                    if start_idx == node {
+                        Some((end_idx, 1))  // Assuming a weight of 1 for simplicity
+                    } else if end_idx == node {
+                        Some((start_idx, 1)) // Assuming a weight of 1 for simplicity
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+
+        // Use Dijkstra's algorithm from the pathfinding crate
+        let start_node = *vertex_id as usize;
+        let end_node = *second_highest as usize;
+        let result = dijkstra(&start_node, successors, |&p| p == end_node);
+
+        let mut edges: Vec<tri_mesh::HalfEdgeID> = Vec::new();
+
+        // Check if a path was found
+        if let Some((path, _cost)) = result {
+            // Iterate over the path to get each pair of vertices
+            for window in path.windows(2) {
+                if let [v1, v2] = *window {
+                    // Find the edge connecting v1 and v2
+                    let v1_id = self.mesh.vertex_iter().nth(v1).unwrap();
+                    let v2_id = self.mesh.vertex_iter().nth(v2).unwrap();
+                    let edge = self.mesh.connecting_edge(v1_id, v2_id).unwrap();
+                    edges.push(edge);
+                }
+            }
+
+            const TWIN_EDGE_COUNT: usize = 2;
+            while edges.len() % TWIN_EDGE_COUNT != 0 {
+                edges.pop();
+            }
+
+            assert_eq!(edges.len() % TWIN_EDGE_COUNT, 0);
+            assert!(edges.len() > 0);
+
+        } else {
+            println!("No path found between the vertices.");
+        }
+
+        edges
     }
 
     pub fn calculate_gaussian_curvature(&self) -> Vec<f64> {
@@ -129,7 +188,6 @@ impl MeshAnalysis {
 mod tests {
     use crate::io;
     use tri_mesh::Vec3;
-    use pathfinding::prelude::dijkstra;
 
     #[test]
     fn test_calculate_angles_for_known_triangle() {
@@ -238,66 +296,8 @@ mod tests {
     fn test_max_curvature() {
         let mesh = io::load_test_mesh_closed();
         let mesh_analysis = super::MeshAnalysis::new(mesh);
-        let vertex_id = mesh_analysis.vertex_with_highest_curvature();
-        let second_highest = mesh_analysis.vertex_with_second_highest_curvature();
+        let edges = mesh_analysis.get_gaussian_cutline();
 
-        println!("Vertex {:?} has highest curvature", mesh_analysis.mesh.position(vertex_id));
-        println!("Vertex {:?} has second highest curvature", mesh_analysis.mesh.position(second_highest));
-
-        let successors = |&node: &usize| -> Vec<(usize, i32)> {
-            mesh_analysis.mesh.edge_iter()
-                .filter_map(|edge| {
-                    let (start, end) = mesh_analysis.mesh.edge_vertices(edge);
-
-                    let start_idx = *start as usize;
-                    let end_idx = *end as usize;
-
-                    if start_idx == node {
-                        Some((end_idx, 1))  // Assuming a weight of 1 for simplicity
-                    } else if end_idx == node {
-                        Some((start_idx, 1)) // Assuming a weight of 1 for simplicity
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
-
-        // Use Dijkstra's algorithm from the pathfinding crate
-        let start_node = *vertex_id as usize;
-        let end_node = *second_highest as usize;
-        let result = dijkstra(&start_node, successors, |&p| p == end_node);
-
-        // Check if a path was found
-        if let Some((path, _cost)) = result {
-            // Vector to store the edges
-            let mut edges = Vec::new();
-
-            // Iterate over the path to get each pair of vertices
-            for window in path.windows(2) {
-                if let [v1, v2] = *window {
-                    // Find the edge connecting v1 and v2
-                    let v1_id = mesh_analysis.mesh.vertex_iter().nth(v1).unwrap();
-                    let v2_id = mesh_analysis.mesh.vertex_iter().nth(v2).unwrap();
-                    let edge = mesh_analysis.mesh.connecting_edge(v1_id, v2_id);
-                    edges.push(edge);
-                }
-            }
-
-            const TWIN_EDGE_COUNT: usize = 2;
-            while edges.len() % TWIN_EDGE_COUNT != 0 {
-                edges.pop();
-            }
-
-            assert_eq!(edges.len() % TWIN_EDGE_COUNT, 0);
-            assert!(edges.len() > 0);
-
-            // // Now 'edges' contains the edges of the path
-            // for edge in edges {
-            //     println!("Edge: {:?}", edge);
-            // }
-        } else {
-            println!("No path found between the vertices.");
-        }
+        assert_eq!(edges.len(), 48);
     }
 }
