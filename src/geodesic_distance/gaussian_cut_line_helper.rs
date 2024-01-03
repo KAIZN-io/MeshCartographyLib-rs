@@ -262,26 +262,16 @@ mod tests {
         for edge in mesh_analysis.mesh.edge_iter() {
             let (start, end) = mesh_analysis.mesh.edge_vertices(edge);
 
-            let index_as_u32: u32 = *start;
-            let index_as_usize: usize = index_as_u32 as usize;
-            let start_idx = node_indices[index_as_usize];
-
-            let index_as_u32: u32 = *end;
-            let index_as_usize: usize = index_as_u32 as usize;
-            let end_idx = node_indices[index_as_usize];
+            let start_idx = node_indices[*start as usize];
+            let end_idx = node_indices[*end as usize];
             let weight = 1.0;
 
             graph.add_edge(start_idx, end_idx, weight);
         }
 
         // Convert mesh vertex indices to graph node indices
-        let index_as_u32: u32 = *vertex_id;
-        let index_as_usize: usize = index_as_u32 as usize;
-        let start_node = node_indices[index_as_usize];
-
-        let index_as_u32: u32 = *second_highest;
-        let index_as_usize: usize = index_as_u32 as usize;
-        let end_node = node_indices[index_as_usize];
+        let start_node = node_indices[*vertex_id as usize];
+        let end_node = node_indices[*second_highest as usize];
 
         // Use Dijkstra's algorithm to find the shortest path
         let path = dijkstra(&graph, start_node, Some(end_node), |e| *e.weight());
