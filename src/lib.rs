@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
+use nalgebra::Vector2;
 
 mod mesh_definition;
 use crate::mesh_definition::TexCoord;
@@ -62,6 +63,14 @@ fn get_mesh_cartography_lib_dir() -> PathBuf {
     PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
 }
 
+fn create_mesh(vertices_id: Vec<Vector3<f64>>, faces_id: Vec<u32>) -> Mesh {
+    Mesh::new(&three_d_asset::TriMesh {
+        positions: three_d_asset::Positions::F64(vertices_id),
+        indices: three_d_asset::Indices::U32(faces_id),
+        ..Default::default()
+    })
+}
+
 pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>>) -> Mesh {
     // Flatten the Vec<Vec<Vector3<f64>>> to Vec<Vector3<f64>>
     let combined_vertices: Vec<Vector3<f64>> = grouped_vertices.into_iter().flatten().collect();
@@ -95,11 +104,53 @@ pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>
     }
 
     // Create the mesh
-    Mesh::new(&three_d_asset::TriMesh {
-        positions: three_d_asset::Positions::F64(unique_vertices),
-        indices: three_d_asset::Indices::U32(face_indices),
-        ..Default::default()
-    })
+    create_mesh(unique_vertices, face_indices)
+}
+
+fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeID>) {
+    // let mut grouped_face_vertices = Vec::new();
+
+    // for face_id in mesh.face_iter() {
+    //     let (vertex1, vertex2, vertex3) = mesh.face_vertices(face_id);
+    //     let face_vertex_coords = vec![vertex1, vertex2, vertex3];
+    //     grouped_face_vertices.push(face_vertex_coords);
+    // }
+
+    // for i in grouped_face_vertices.iter() {
+    //     println!("face: {:?}", i);
+    // }
+
+    // // 0.1 Initialize the mesh: Add all the vertices of the mesh to the grouped_face_vertices
+    // crate::surface_parameterization::tessellation_helper::collect_face_vertices(&mesh, &mut grouped_face_vertices);
+
+    // // ? 0.2 Add the vertices of the seam from every second entry of edge_path
+    // // This ensures that the first and last vertex of the seam don't get added
+    // for i in (1..edge_path.len()).step_by(1) {
+    //     let edge = edge_path[i];
+    //     let (v0, v1) = mesh.edge_vertices(edge);
+    //     let v0_position = mesh.vertex_position(v0);
+    //     let v1_position = mesh.vertex_position(v1);
+    //     grouped_face_vertices.push(vec![v0_position, v1_position]);
+    // }
+
+    // !!! Wait! Wir müssen ja die Verbindung trennen und können dafür nicht auf die Koordinaten verlassen, oder??
+    // let (v0, v1) = mesh.edge_vertices(*halfedge_id);
+    // println!("v0: {:?}", mesh.position(v0));
+    // println!("v1: {:?}", mesh.position(v1));
+
+
+
+    for halfedge_id in edge_path.iter() {
+        let mut walker = mesh.walker_from_halfedge(*halfedge_id);
+        let h2 = walker.as_twin();
+        let v2 = h2.vertex_id().unwrap();
+        println!("v2: {:?}", mesh.position(v2));
+    }
+
+    // Finally: Assemble the mesh
+    // face: [Vector3 [-0.34658, 0.601251, 0.0], Vector3 [-0.353361, 0.613077, 0.0], Vector3 [-0.360608, 0.608242, 0.0]]
+    // let mesh_open = create_mesh_from_grouped_vertices(grouped_face_vertices);
+
 }
 
 // Function to create UV surface
@@ -110,17 +161,19 @@ pub fn create_uv_surface() {
     let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
     // let mesh_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
     let mesh_path = mesh_cartography_lib_dir.join("ellipsoid_x4.obj");
-    // let save_path = mesh_cartography_lib_dir.join("ellipsoid_x4_edited.obj");
+    let save_path = mesh_cartography_lib_dir.join("ellipsoid_x4_edited.obj");
     let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
 
     // Load the mesh
     let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
 
     let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(surface_mesh.clone());
-    let edge_path = cutline_helper.get_gaussian_cutline();
+    let edge_path: Vec<tri_mesh::HalfEdgeID> = cutline_helper.get_gaussian_cutline();
 
     // Todo: Open up the mesh along the cutline
-    // open_mesh_along_seam(edge_path);
+    open_mesh_along_seam(surface_mesh, edge_path);
+
+
 
 
 
@@ -133,7 +186,7 @@ pub fn create_uv_surface() {
     // io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
     //     .expect("Failed to save mesh to file");
 
-    // Load the mesh and the UV mesh
+    // // Load the mesh and the UV mesh
     // let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
     // let uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
 
@@ -159,7 +212,7 @@ pub fn create_uv_surface() {
     // let (border_v_map, border_map) = monotile_border::get_sub_borders(&boundary_vertices, &mesh_tex_coords);
     // let save_path_uv2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv_tessellation.obj");
 
-    // let mut grouped_face_vertices = Vec::new();
+    // let mut grouped_face_vertices: Vec<Vec<Vector3<f64>>> = Vec::new();
     // crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
 
     // let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
