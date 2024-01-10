@@ -165,9 +165,7 @@ fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeI
         let h2 = walker.as_previous().halfedge_id().unwrap();
 
         // 2.1 Get the vertices of the halfedges
-        let v0 = mesh.walker_from_halfedge(h0).vertex_id().unwrap();
-        let v1 = mesh.walker_from_halfedge(h1).vertex_id().unwrap();
-        let v2 = mesh.walker_from_halfedge(h2).vertex_id().unwrap();
+        let (v0, v1, v2) = mesh.face_vertices(f);
 
         let mut v0_u32 = *v0;
         let mut v1_u32 = *v1;
@@ -182,33 +180,27 @@ fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeI
         if h0_exists || h1_exists || h2_exists {
             // Process each vertex separately by getting the second index of the vertex_coord which will be the newly added vertex
             if h0_exists {
-                println!("v0_u32 before: {}", v0_u32);
                 if let Some((index, _)) = vertex_coord.iter().enumerate()
                     .filter(|&(_, v)| *v == mesh.position(v0))
                     .nth(1) {
                         v0_u32 = index as u32;
                 }
-                println!("v0_u32 after: {}", v0_u32);
             }
 
             if h1_exists {
-                println!("v1_u32 before: {}", v1_u32);
                 if let Some((index, _)) = vertex_coord.iter().enumerate()
                     .filter(|&(_, v)| *v == mesh.position(v1))
                     .nth(1) {
                         v1_u32 = index as u32;
                 }
-                println!("v1_u32 after: {}", v1_u32);
             }
 
             if h2_exists {
-                println!("v2_u32 before: {}", v2_u32);
                 if let Some((index, _)) = vertex_coord.iter().enumerate()
                     .filter(|&(_, v)| *v == mesh.position(v2))
                     .nth(1) {
                         v2_u32 = index as u32;
                 }
-                println!("v2_u32 after: {}", v2_u32);
             }
         }
         face_id.push(v0_u32);
