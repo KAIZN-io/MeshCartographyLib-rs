@@ -107,38 +107,25 @@ pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>
     create_mesh(unique_vertices, face_indices)
 }
 
-fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeID>) {
+
+fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Mesh {
     let mut halfedgesPointingToSeam = edge_path.clone();
-    // let mut grouped_face_vertices = Vec::new();
+    let mut vertex_coord = Vec::new();
 
-    // for face_id in mesh.face_iter() {
-    //     let (vertex1, vertex2, vertex3) = mesh.face_vertices(face_id);
-    //     let face_vertex_coords = vec![vertex1, vertex2, vertex3];
-    //     grouped_face_vertices.push(face_vertex_coords);
-    // }
+    // 0.1 Add all old vertices
+    for vertex_id in mesh.vertex_iter() {
+        let vertex_position = mesh.vertex_position(vertex_id);
+        vertex_coord.push(vertex_position);
+    }
 
-    // for i in grouped_face_vertices.iter() {
-    //     println!("face: {:?}", i);
-    // }
-
-    // // 0.1 Initialize the mesh: Add all the vertices of the mesh to the grouped_face_vertices
-    // crate::surface_parameterization::tessellation_helper::collect_face_vertices(&mesh, &mut grouped_face_vertices);
-
-    // // ? 0.2 Add the vertices of the seam from every second entry of edge_path
-    // // This ensures that the first and last vertex of the seam don't get added
-    // for i in (1..edge_path.len()).step_by(1) {
-    //     let edge = edge_path[i];
-    //     let (v0, v1) = mesh.edge_vertices(edge);
-    //     let v0_position = mesh.vertex_position(v0);
-    //     let v1_position = mesh.vertex_position(v1);
-    //     grouped_face_vertices.push(vec![v0_position, v1_position]);
-    // }
-
-    // !!! Wait! Wir müssen ja die Verbindung trennen und können dafür nicht auf die Koordinaten verlassen, oder??
-    // let (v0, v1) = mesh.edge_vertices(*halfedge_id);
-    // println!("v0: {:?}", mesh.position(v0));
-    // println!("v1: {:?}", mesh.position(v1));
-
+    // 0.2 Add the vertices of the seam from every second entry of edge_path
+    // This ensures that the first and last vertex of the seam don't get added
+    for i in (1..edge_path.len()).step_by(1) {
+        let edge = edge_path[i];
+        let (v0, _) = mesh.edge_vertices(edge);
+        let v0_position = mesh.vertex_position(v0);
+        vertex_coord.push(v0_position);
+    }
 
     let mut cut_line_vertices = Vec::new();
     let first_edge = edge_path[0];
@@ -153,8 +140,6 @@ fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeI
         cut_line_vertices.push(v1);
     }
 
-    // println!("cut_line_vertices: {:?}", cut_line_vertices);
-    // cut_line_vertices: [VertexID(4520), VertexID(3661), VertexID(3663), VertexID(3664), VertexID(601), VertexID(602), VertexID(603), VertexID(631), VertexID(632), VertexID(633), VertexID(663), VertexID(634), VertexID(664), VertexID(665), VertexID(611), VertexID(583), VertexID(666), VertexID(667), VertexID(724), VertexID(725), VertexID(669), VertexID(796), VertexID(1229), VertexID(1533), VertexID(1759), VertexID(1940), VertexID(2178), VertexID(2071), VertexID(2069), VertexID(1978), VertexID(2031), VertexID(2068), VertexID(2067), VertexID(2066), VertexID(2065), VertexID(2087), VertexID(2118), VertexID(2117), VertexID(2086), VertexID(2116), VertexID(2147), VertexID(2171), VertexID(2204), VertexID(2229), VertexID(3827), VertexID(3825), VertexID(4569), VertexID(4456), VertexID(3824)]
     // 1. add the two other halfedges that heads towards the seam
     for i in 0..(edge_path.len() - 1) {
         let mut h = edge_path[i];
@@ -171,12 +156,68 @@ fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeI
         }
     }
 
-    println!("size of halfedgesPointingToSeam: {}", halfedgesPointingToSeam.len());
+    let mut face_id = Vec::new();
+    for f in mesh.face_iter() {
+        // 2. Get the three halfedges of the face
+        let mut walker = mesh.walker_from_face(f);
+        let h0 = walker.halfedge_id().unwrap();
+        let h1 = walker.as_next().halfedge_id().unwrap();
+        let h2 = walker.as_previous().halfedge_id().unwrap();
+
+        // 2.1 Get the vertices of the halfedges
+        let v0 = mesh.walker_from_halfedge(h0).vertex_id().unwrap();
+        let v1 = mesh.walker_from_halfedge(h1).vertex_id().unwrap();
+        let v2 = mesh.walker_from_halfedge(h2).vertex_id().unwrap();
+
+        let mut v0_u32 = *v0;
+        let mut v1_u32 = *v1;
+        let mut v2_u32 = *v2;
+
+        // find if h0, h1 or h2 is in halfedgesPointingToSeam
+        let h0_exists = halfedgesPointingToSeam.contains(&h0);
+        let h1_exists = halfedgesPointingToSeam.contains(&h1);
+        let h2_exists = halfedgesPointingToSeam.contains(&h2);
+
+        // if any of the halfedges is in halfedgesPointingToSeam
+        if h0_exists || h1_exists || h2_exists {
+            // Process each vertex separately by getting the second index of the vertex_coord which will be the newly added vertex
+            if h0_exists {
+                println!("v0_u32 before: {}", v0_u32);
+                if let Some((index, _)) = vertex_coord.iter().enumerate()
+                    .filter(|&(_, v)| *v == mesh.position(v0))
+                    .nth(1) {
+                        v0_u32 = index as u32;
+                }
+                println!("v0_u32 after: {}", v0_u32);
+            }
+
+            if h1_exists {
+                println!("v1_u32 before: {}", v1_u32);
+                if let Some((index, _)) = vertex_coord.iter().enumerate()
+                    .filter(|&(_, v)| *v == mesh.position(v1))
+                    .nth(1) {
+                        v1_u32 = index as u32;
+                }
+                println!("v1_u32 after: {}", v1_u32);
+            }
+
+            if h2_exists {
+                println!("v2_u32 before: {}", v2_u32);
+                if let Some((index, _)) = vertex_coord.iter().enumerate()
+                    .filter(|&(_, v)| *v == mesh.position(v2))
+                    .nth(1) {
+                        v2_u32 = index as u32;
+                }
+                println!("v2_u32 after: {}", v2_u32);
+            }
+        }
+        face_id.push(v0_u32);
+        face_id.push(v1_u32);
+        face_id.push(v2_u32);
+    }
 
     // Finally: Assemble the mesh
-    // face: [Vector3 [-0.34658, 0.601251, 0.0], Vector3 [-0.353361, 0.613077, 0.0], Vector3 [-0.360608, 0.608242, 0.0]]
-    // let mesh_open = create_mesh_from_grouped_vertices(grouped_face_vertices);
-
+    create_mesh(vertex_coord, face_id)
 }
 
 // Function to create UV surface
@@ -185,27 +226,22 @@ pub fn create_uv_surface() {
     log::info!("Reading mesh from file...");
 
     let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
-    // let mesh_path = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
+    let mesh_path_open = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
     let mesh_path = mesh_cartography_lib_dir.join("ellipsoid_x4.obj");
     let save_path = mesh_cartography_lib_dir.join("ellipsoid_x4_edited.obj");
     let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
 
     // Load the mesh
-    let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
+    let surface_closed = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
 
-    let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(surface_mesh.clone());
+    let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(surface_closed.clone());
     let edge_path: Vec<tri_mesh::HalfEdgeID> = cutline_helper.get_gaussian_cutline();
 
     // Todo: Open up the mesh along the cutline
-    open_mesh_along_seam(surface_mesh, edge_path);
+    let surface_mesh = open_mesh_along_seam(surface_closed, edge_path);
 
-
-
-
-
-
-
-    // io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
+    // Save the mesh
+    io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
     // let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
 
