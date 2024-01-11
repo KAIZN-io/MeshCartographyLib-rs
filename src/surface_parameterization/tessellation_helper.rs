@@ -11,7 +11,6 @@
 //! - **Bugs:** -
 //! - **Todo:** -
 
-use crate::mesh_definition;
 use crate::mesh_definition::TexCoord;
 use std::collections::HashMap;
 use tri_mesh::{Mesh, VertexID, Vector3};

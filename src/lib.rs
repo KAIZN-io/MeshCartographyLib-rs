@@ -146,7 +146,11 @@ impl MeshProcessor {
 
         let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
 
-        io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
+        // Set the fields of the struct
+        self.boundary_vertices = boundary_vertices;
+        self.mesh_tex_coords = mesh_tex_coords;
+
+        io::save_uv_mesh_as_obj(&surface_mesh, &self.mesh_tex_coords, save_path_uv.clone())
             .expect("Failed to save mesh to file");
 
         // Load the mesh and the UV mesh
@@ -173,7 +177,9 @@ impl MeshProcessor {
 
     // Create the Kachelmuster with Heesch numbers
     pub fn create_tessellation_mesh(&mut self, uv_mesh_centre: &mut Mesh) -> Mesh {
-        let mut uv_mesh = uv_mesh_centre.clone();
+        // ! Temp: load the uv_mesh
+        let save_path_uv = self.mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
+
         let (border_v_map, border_map) = monotile_border::get_sub_borders(&self.boundary_vertices, &self.mesh_tex_coords);
         let save_path_uv2 = self.mesh_cartography_lib_dir.join("ellipsoid_x4_uv_tessellation.obj");
 
@@ -199,7 +205,8 @@ impl MeshProcessor {
                 .collect();
 
             let rotation_angle = tessellation.calculate_angle(&border1, &border2);
-
+            // ! Temp: load the uv_mesh
+            let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
             tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
             log::info!("docking_side: {}", docking_side);
 

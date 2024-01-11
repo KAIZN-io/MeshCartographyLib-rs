@@ -49,7 +49,7 @@ impl MeshAnalysis {
                     // Find the edge connecting v1 and v2
                     let v1_id = self.mesh.vertex_iter().nth(v1).unwrap();
                     let v2_id = self.mesh.vertex_iter().nth(v2).unwrap();
-                    let edge = self.mesh.connecting_edge(v1_id, v2_id).unwrap();
+                    let edge = self.mesh.connecting_edge(v2_id, v1_id).unwrap();
                     edges.push(edge);
                 }
             }
