@@ -8,14 +8,14 @@
 //!
 //! ## Current Status
 //!
-//! - **Bugs:** -
+//! - **Bugs:** - The opening of the mesh along the cut line is not working properly
 //! - **Todo:** -
 
 // Import necessary modules and types
 use wasm_bindgen::prelude::*;
 use std::env;
 use std::path::PathBuf;
-use tri_mesh::{Mesh, VertexID, Vector3};
+use tri_mesh::{Mesh, VertexID, FaceID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use nalgebra::Vector2;
@@ -107,12 +107,9 @@ pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>
     create_mesh(unique_vertices, face_indices)
 }
 
-
-fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Mesh {
-    let mut halfedgesPointingToSeam = edge_path.clone();
-    let mut vertex_coord = Vec::new();
-
+fn collect_v_positions(mesh: &Mesh, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Vec<Vector3<f64>> {
     // 0.1 Add all old vertices
+    let mut vertex_coord = Vec::new();
     for vertex_id in mesh.vertex_iter() {
         let vertex_position = mesh.vertex_position(vertex_id);
         vertex_coord.push(vertex_position);
@@ -126,24 +123,33 @@ fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeI
         let v0_position = mesh.vertex_position(v0);
         vertex_coord.push(v0_position);
     }
+    vertex_coord
+}
 
-    let mut cut_line_vertices = Vec::new();
+fn get_cutline(mesh: &Mesh, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Vec<VertexID> {
+    let mut cutline_vertices = Vec::new();
     let first_edge = edge_path[0];
     let (v0, _) = mesh.edge_vertices(first_edge);
-    cut_line_vertices.push(v0);
+    cutline_vertices.push(v0);
 
     for halfedge_id in edge_path.iter() {
         let (v0, v1) = mesh.edge_vertices(*halfedge_id);
-        if cut_line_vertices.last() != Some(&v0) {
+        if cutline_vertices.last() != Some(&v0) {
             panic!("Error in the sorted edge path of the cut line.");
         }
-        cut_line_vertices.push(v1);
+        cutline_vertices.push(v1);
     }
+    cutline_vertices
+}
 
-    // 1. add the two other halfedges that heads towards the seam
+fn collect_zigzag_cutline(mesh: &Mesh, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Vec<tri_mesh::HalfEdgeID> {
+    // 0.1 Get the vertices of the cut line
+    let cutline_vertices = get_cutline(&mesh, edge_path.clone());
+
+    let mut zigzag_cutline = edge_path.clone();
     for i in 0..(edge_path.len() - 1) {
         let mut h = edge_path[i];
-        let vertice_after = cut_line_vertices[i + 2];
+        let vertice_after = cutline_vertices[i + 2];
         let mut walker: tri_mesh::Walker<'_> = mesh.walker_from_halfedge(h);
 
         while true {
@@ -152,55 +158,74 @@ fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeI
             if v1 == vertice_after {
                 break;
             }
-            halfedgesPointingToSeam.push(h_center);
+            zigzag_cutline.push(h_center);
         }
     }
+    zigzag_cutline
+}
 
-    let mut face_id = Vec::new();
+fn get_affected_faces(mesh: &Mesh, zigzag_cutline: Vec<tri_mesh::HalfEdgeID>) -> Vec<FaceID> {
+    let mut affected_faces = Vec::new();
     for f in mesh.face_iter() {
-        // 2. Get the three halfedges of the face
         let mut walker = mesh.walker_from_face(f);
+
         let h0 = walker.halfedge_id().unwrap();
         let h1 = walker.as_next().halfedge_id().unwrap();
         let h2 = walker.as_previous().halfedge_id().unwrap();
 
-        // 2.1 Get the vertices of the halfedges
+        // find if h0, h1 or h2 is in zigzag_cutline
+        let h0_exists = zigzag_cutline.contains(&h0);
+        let h1_exists = zigzag_cutline.contains(&h1);
+        let h2_exists = zigzag_cutline.contains(&h2);
+
+        if h0_exists || h1_exists || h2_exists {
+            affected_faces.push(f);
+        }
+    }
+    affected_faces
+}
+
+fn open_mesh_along_seam(mesh: tri_mesh::Mesh, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Mesh {
+
+    // 0. Get all vertices of the open mesh
+    let vertex_coord = collect_v_positions(&mesh, edge_path.clone());
+
+    // 1. Find all halfedges that are inside the affected faces
+    let zigzag_cutline = collect_zigzag_cutline(&mesh, edge_path.clone());
+
+    // 2. Get the affected faces where at least one halfedge from zigzag_cutline is inside
+    let affected_faces = get_affected_faces(&mesh, zigzag_cutline.clone());
+
+    // 3. Assign new vertex indices to the affected faces
+    let mut face_id = Vec::new();
+    for f in mesh.face_iter() {
+        // 3.1 Get the vertices of the face
         let (v0, v1, v2) = mesh.face_vertices(f);
 
         let mut v0_u32 = *v0;
         let mut v1_u32 = *v1;
         let mut v2_u32 = *v2;
 
-        // find if h0, h1 or h2 is in halfedgesPointingToSeam
-        let h0_exists = halfedgesPointingToSeam.contains(&h0);
-        let h1_exists = halfedgesPointingToSeam.contains(&h1);
-        let h2_exists = halfedgesPointingToSeam.contains(&h2);
-
-        // if any of the halfedges is in halfedgesPointingToSeam
-        if h0_exists || h1_exists || h2_exists {
+        // if the face is affected -> if f is inside affected_faces
+        if affected_faces.contains(&f) {
             // Process each vertex separately by getting the second index of the vertex_coord which will be the newly added vertex
-            if h0_exists {
-                if let Some((index, _)) = vertex_coord.iter().enumerate()
-                    .filter(|&(_, v)| *v == mesh.position(v0))
-                    .nth(1) {
-                        v0_u32 = index as u32;
-                }
+            if let Some((index, _)) = vertex_coord.iter().enumerate()
+                .filter(|&(_, v)| *v == mesh.position(v0))
+                .nth(1) {
+                    v0_u32 = index as u32;
             }
 
-            if h1_exists {
-                if let Some((index, _)) = vertex_coord.iter().enumerate()
-                    .filter(|&(_, v)| *v == mesh.position(v1))
-                    .nth(1) {
-                        v1_u32 = index as u32;
-                }
+
+            if let Some((index, _)) = vertex_coord.iter().enumerate()
+                .filter(|&(_, v)| *v == mesh.position(v1))
+                .nth(1) {
+                    v1_u32 = index as u32;
             }
 
-            if h2_exists {
-                if let Some((index, _)) = vertex_coord.iter().enumerate()
-                    .filter(|&(_, v)| *v == mesh.position(v2))
-                    .nth(1) {
-                        v2_u32 = index as u32;
-                }
+            if let Some((index, _)) = vertex_coord.iter().enumerate()
+                .filter(|&(_, v)| *v == mesh.position(v2))
+                .nth(1) {
+                    v2_u32 = index as u32;
             }
         }
         face_id.push(v0_u32);
@@ -229,16 +254,16 @@ pub fn create_uv_surface() {
     let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(surface_closed.clone());
     let edge_path: Vec<tri_mesh::HalfEdgeID> = cutline_helper.get_gaussian_cutline();
 
-    // Todo: Open up the mesh along the cutline
+    // Open up the mesh along the cutline
     let surface_mesh = open_mesh_along_seam(surface_closed, edge_path);
 
     // Save the mesh
     io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
-    // let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
+    let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
 
-    // io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
-    //     .expect("Failed to save mesh to file");
+    io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
+        .expect("Failed to save mesh to file");
 
     // // Load the mesh and the UV mesh
     // let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
@@ -342,14 +367,19 @@ fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &[VertexID], len
 fn get_boundary_edges(surface_mesh: &Mesh) -> (Vec<(VertexID, VertexID)>, f64) {
     let mut boundary_edges = Vec::new();
     let mut length = 0.0;
+    let mut i = 0;
 
     for edge in surface_mesh.edge_iter() {
         let (v0, v1) = surface_mesh.edge_vertices(edge);
         if surface_mesh.is_vertex_on_boundary(v0) && surface_mesh.is_vertex_on_boundary(v1) {
             boundary_edges.push((v0, v1));
             length += surface_mesh.edge_length(edge);
+            i += 1;
         }
     }
+
+    // ! TODO: zu viele boundary edges -> das mesh wurde also nicht richtig geöffnet
+    println!("found {} boundary edges", i);
 
     (boundary_edges, length)
 }
@@ -378,8 +408,6 @@ fn get_boundary_vertices(edge_list: &[(VertexID, VertexID)], surface_mesh: &Mesh
             break;
         }
     }
-
-    assert_eq!(boundary_vertices.len(), 112); // Ensure boundary vertices count matches expected number
 
     let unique_vertex_ids = sort_boundary_vertices(&mut boundary_vertices, &surface_mesh);
 
