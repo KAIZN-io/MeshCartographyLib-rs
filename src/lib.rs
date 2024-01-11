@@ -15,15 +15,15 @@
 use wasm_bindgen::prelude::*;
 use std::env;
 use std::path::PathBuf;
-use tri_mesh::{Mesh, VertexID, FaceID, Vector3};
+use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use nalgebra::Vector2;
 
-mod mesh_definition;
+pub mod mesh_definition;
 use crate::mesh_definition::TexCoord;
 
-mod io;
+pub mod io;
 mod monotile_border;
 
 mod geodesic_distance {
@@ -109,101 +109,116 @@ pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>
     create_mesh(unique_vertices, face_indices)
 }
 
-// Function to create UV surface
-#[wasm_bindgen]
-pub fn create_uv_surface() {
-    log::info!("Reading mesh from file...");
+pub struct MeshProcessor {
+    boundary_vertices: Vec<VertexID>,
+    mesh_tex_coords: mesh_definition::MeshTexCoords,
+    mesh_cartography_lib_dir: PathBuf,
+    surface_closed: Mesh,
+}
 
-    let mesh_cartography_lib_dir = get_mesh_cartography_lib_dir();
-    let mesh_path_open = mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-    let mesh_path = mesh_cartography_lib_dir.join("ellipsoid_x4.obj");
-    let save_path = mesh_cartography_lib_dir.join("ellipsoid_x4_edited.obj");
-    let save_path_uv = mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
+impl MeshProcessor {
+    pub fn new(surface_closed: Mesh)  -> Self {
+        // Initialize the struct
+        MeshProcessor {
+            boundary_vertices: Vec::new(),
+            mesh_tex_coords: mesh_definition::MeshTexCoords::new(&surface_closed),
+            mesh_cartography_lib_dir: get_mesh_cartography_lib_dir(),
+            surface_closed,
+        }
+    }
 
-    // Load the mesh
-    let surface_closed = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
+    // Function to create UV surface
+    // #[wasm_bindgen]
+    pub fn create_uv_surface(&mut self, mesh_path: &str) -> Mesh {
+        let mesh_path = PathBuf::from(mesh_path);
+        let save_path = self.mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
+        let save_path_uv = self.mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
 
-    let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(surface_closed.clone());
-    let edge_path: Vec<tri_mesh::HalfEdgeID> = cutline_helper.get_gaussian_cutline();
+        let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(self.surface_closed.clone());
+        let edge_path: Vec<tri_mesh::HalfEdgeID> = cutline_helper.get_gaussian_cutline();
 
-    // Open up the mesh along the cutline
-    let cut_mesh_helper = mesh_cutting::MeshCutting::new(surface_closed.clone());
-    let surface_mesh = cut_mesh_helper.open_mesh_along_seam(surface_closed, edge_path);
+        // Open up the mesh along the cutline
+        let cut_mesh_helper = mesh_cutting::MeshCutting::new(self.surface_closed.clone());
+        let surface_mesh = cut_mesh_helper.open_mesh_along_seam(edge_path);
 
-    // Save the mesh
-    io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
+        // Save the mesh
+        io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
 
-    let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
+        let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
 
-    io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
-        .expect("Failed to save mesh to file");
+        io::save_uv_mesh_as_obj(&surface_mesh, &mesh_tex_coords, save_path_uv.clone())
+            .expect("Failed to save mesh to file");
 
-    // // Load the mesh and the UV mesh
-    // let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
-    // let uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+        // Load the mesh and the UV mesh
+        let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
+        let uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
 
-    // // Compute the angle distortion
-    // let angle_distortion_helper = mesh_metric::angle_distortion_helper::AngleDistortionHelper::new(&surface_mesh, &uv_mesh);
-    // let angle_distortion = angle_distortion_helper.compute_angle_distortion();
-    // log::info!("Angle distortion: {}", angle_distortion);
+        // Compute the angle distortion
+        let angle_distortion_helper = mesh_metric::angle_distortion_helper::AngleDistortionHelper::new(&surface_mesh, &uv_mesh);
+        let angle_distortion = angle_distortion_helper.compute_angle_distortion();
+        log::info!("Angle distortion: {}", angle_distortion);
 
-    // // Compute the face distortion
-    // let face_distortion_helper = mesh_metric::face_distortion_helper::FaceDistortionHelper::new(&surface_mesh, &uv_mesh);
-    // let face_distortion = face_distortion_helper.compute_face_distortion();
-    // log::info!("Face distortion: {}", face_distortion);
+        // Compute the face distortion
+        let face_distortion_helper = mesh_metric::face_distortion_helper::FaceDistortionHelper::new(&surface_mesh, &uv_mesh);
+        let face_distortion = face_distortion_helper.compute_face_distortion();
+        log::info!("Face distortion: {}", face_distortion);
 
-    // // Compute the length distortion
-    // let length_distortion_helper = mesh_metric::length_distortion_helper::LengthDistortionHelper::new(&surface_mesh, &uv_mesh);
-    // let length_distortion = length_distortion_helper.compute_length_distortion();
-    // log::info!("Length distortion: {}", length_distortion);
+        // Compute the length distortion
+        let length_distortion_helper = mesh_metric::length_distortion_helper::LengthDistortionHelper::new(&surface_mesh, &uv_mesh);
+        let length_distortion = length_distortion_helper.compute_length_distortion();
+        log::info!("Length distortion: {}", length_distortion);
 
+        uv_mesh
+    }
 
-    // // Create the Kachelmuster with Heesch numbers
-    // let mut uv_mesh_centre = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+    // Create the Kachelmuster with Heesch numbers
+    pub fn create_tessellation_mesh(&mut self, uv_mesh_centre: &mut Mesh) -> Mesh {
+        let mut uv_mesh = uv_mesh_centre.clone();
+        let (border_v_map, border_map) = monotile_border::get_sub_borders(&self.boundary_vertices, &self.mesh_tex_coords);
+        let save_path_uv2 = self.mesh_cartography_lib_dir.join("ellipsoid_x4_uv_tessellation.obj");
 
-    // let (border_v_map, border_map) = monotile_border::get_sub_borders(&boundary_vertices, &mesh_tex_coords);
-    // let save_path_uv2 = mesh_cartography_lib_dir.join("ellipsoid_x4_uv_tessellation.obj");
+        let mut grouped_face_vertices: Vec<Vec<Vector3<f64>>> = Vec::new();
+        crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
 
-    // let mut grouped_face_vertices: Vec<Vec<Vector3<f64>>> = Vec::new();
-    // crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
+        let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
+        let size = border_map.len();
+        for i in 0..size {
+            let docking_side: usize = i;
+            let next_index = (i + 1) % size;
 
-    // let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
-    // let size = border_map.len();
-    // for i in 0..size {
-    //     let docking_side: usize = i;
-    //     let next_index = (i + 1) % size;
+            // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&next_index]
+            let border1: Vec<Vector2<f64>> = border_map[&next_index]
+                .iter()
+                .map(|coord| Vector2::new(coord.0, coord.1))
+                .collect();
 
-    //     // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&next_index]
-    //     let border1: Vec<Vector2<f64>> = border_map[&next_index]
-    //         .iter()
-    //         .map(|coord| Vector2::new(coord.0, coord.1))
-    //         .collect();
+            // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&i]
+            let border2: Vec<Vector2<f64>> = border_map[&i]
+                .iter()
+                .map(|coord| Vector2::new(coord.0, coord.1))
+                .collect();
 
-    //     // Convert Vec<TexCoord> to Vec<Vector2<f64>> for border_map[&i]
-    //     let border2: Vec<Vector2<f64>> = border_map[&i]
-    //         .iter()
-    //         .map(|coord| Vector2::new(coord.0, coord.1))
-    //         .collect();
+            let rotation_angle = tessellation.calculate_angle(&border1, &border2);
 
-    //     let rotation_angle = tessellation.calculate_angle(&border1, &border2);
+            tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
+            log::info!("docking_side: {}", docking_side);
 
-    //     let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
-    //     tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
-    //     log::info!("docking_side: {}", docking_side);
+            // Get the face vertices coordinates
+            crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh, &mut grouped_face_vertices);
+        }
 
-    //     // Get the face vertices coordinates
-    //     crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh, &mut grouped_face_vertices);
-    // }
+        // Add the meshes together
+        let tessellation_mesh = create_mesh_from_grouped_vertices(grouped_face_vertices);
 
-    // // Add the meshes together
-    // let tessellation_mesh = create_mesh_from_grouped_vertices(grouped_face_vertices);
+        // Save the mesh
+        for vertex_id in tessellation_mesh.vertex_iter() {
+            self.mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tessellation_mesh.position(vertex_id).x, tessellation_mesh.position(vertex_id).y));
+        }
+        io::save_uv_mesh_as_obj(&tessellation_mesh, &self.mesh_tex_coords, save_path_uv2.clone())
+            .expect("Failed to save mesh to file");
 
-    // // Save the mesh
-    // for vertex_id in tessellation_mesh.vertex_iter() {
-    //     mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tessellation_mesh.position(vertex_id).x, tessellation_mesh.position(vertex_id).y));
-    // }
-    // io::save_uv_mesh_as_obj(&tessellation_mesh, &mesh_tex_coords, save_path_uv2.clone())
-    //     .expect("Failed to save mesh to file");
+        tessellation_mesh
+    }
 }
 
 fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
