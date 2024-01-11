@@ -17,10 +17,11 @@ build_rust:
 	@echo "Building Rust dependencies..."
 	cargo build --release
 
-# Run the Rust executable
+# Run the Rust executable with an optional argument
 .PHONY: run
 run:
-	RUST_LOG=info cargo run --release
+	@echo "Running with file path: $(FILE_PATH)"
+	RUST_LOG=info cargo run --release -- $(FILE_PATH)
 
 .PHONY: doc
 doc:
