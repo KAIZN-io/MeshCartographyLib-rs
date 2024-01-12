@@ -14,6 +14,7 @@
 use std::path::PathBuf;
 use std::error::Error;
 use std::env;
+use std::fs;
 
 extern crate new_king_lib;
 use new_king_lib::io;
@@ -36,8 +37,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mesh_path = PathBuf::from(file_path);
     let surface_closed = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
 
-    let mut processor = new_king_lib::MeshProcessor::new(surface_closed);
+    let mut processor = new_king_lib::MeshProcessor::from_mesh(surface_closed);
     let mut uv_mesh = processor.create_uv_surface(file_path);
+
+    // // Get the uv mesh path
+    // let uv_mesh_path = processor.mesh_uv_path.clone();
+    // let uv_mesh_path = uv_mesh_path.into_os_string().into_string().unwrap();
+    // // Open OBJ path and return file content as a string
+    // let data = fs::read_to_string(uv_mesh_path).expect("Unable to read file");
+
     let tessellation_mesh = processor.create_tessellation_mesh(&mut uv_mesh);
 
     Ok(())

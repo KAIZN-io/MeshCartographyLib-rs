@@ -115,6 +115,17 @@ pub fn load_mesh_from_obj(path: PathBuf) -> std::result::Result<Mesh, String> {
     Ok(surface_mesh)
 }
 
+pub fn load_mesh_from_js_obj(obj_data: String) -> std::result::Result<Mesh, String> {
+    // Parse the OBJ data from the string
+    let obj_set = obj::parse(&obj_data).map_err(|e| e.to_string())?;
+
+    // Create a TriMesh from the OBJ data
+    let pre_surface_mesh = create_tri_mesh(obj_set)?;
+    let surface_mesh = convert_to_tri_mesh_mesh(pre_surface_mesh)?;
+
+    Ok(surface_mesh)
+}
+
 #[allow(dead_code)]
 pub fn save_mesh_as_obj(mesh: &tri_mesh::Mesh, file_path: PathBuf) -> Result<()> {
     let mut file = File::create(file_path)?;
