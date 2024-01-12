@@ -55,18 +55,18 @@ pub fn build_laplace_matrix(mesh: &Mesh, clamp: bool) -> CsrMatrix<f64> {
     }
 
     // Convert COO to CSR format
-    let mut L = CsrMatrix::from(&coo);
+    let l_mtx = CsrMatrix::from(&coo);
 
     // ! Clamping negative off-diagonal entries to zero
     if clamp {
-        // for (i, j, value) in L.triplet_iter_mut() {
+        // for (i, j, value) in l_mtx.triplet_iter_mut() {
         //     if i != j && *value < 0.0 {
         //         *value = 0.0;
         //     }
         // }
     }
 
-    L
+    l_mtx
 }
 
 fn polygon_laplace_matrix(polygon: &[Point3<f64>]) -> DMatrix<f64> {
