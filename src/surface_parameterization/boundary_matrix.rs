@@ -17,23 +17,22 @@ extern crate tri_mesh;
 use tri_mesh::Mesh;
 
 use crate::mesh_definition;
-use crate::io;
 
 pub fn set_boundary_constraints(mesh: &Mesh, mesh_tex_coords: &mut mesh_definition::MeshTexCoords) -> DMatrix<f64> {
     // Build the RHS vector B
     const DIM: usize = 2;
-    let mut B = DMatrix::zeros(mesh.no_vertices(), DIM);
+    let mut b_mtx = DMatrix::zeros(mesh.no_vertices(), DIM);
     for vertex_id in mesh.vertex_iter() {
         if mesh.is_vertex_on_boundary(vertex_id) {
             if let Some(tex_coord) = mesh_tex_coords.get_tex_coord(vertex_id) {
                 let index_as_u32: u32 = *vertex_id; // Dereference to get u32
                 let index_as_usize: usize = index_as_u32 as usize; // Cast u32 to usize
-                B.set_row(index_as_usize, &nalgebra::RowVector2::new(tex_coord.0, tex_coord.1));
+                b_mtx.set_row(index_as_usize, &nalgebra::RowVector2::new(tex_coord.0, tex_coord.1));
             }
         }
     }
 
-    B
+    b_mtx
 }
 
 
@@ -47,11 +46,11 @@ mod tests {
     fn test_set_boundary_constraints() {
         // Load B matrix
         let file_path = "test/data/B.csv";
-        let B_dense = io::load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
+        let b_dense_mtx = io::load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
 
         let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
-        let _B = set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
+        let b_mtx = set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
 
         // Compare B_dense and B with tolerance
         let epsilon = 1e-6;
@@ -61,8 +60,8 @@ mod tests {
             // convert vertex_id to usize
             let index_as_u32: u32 = *vertex_id;
             let index_as_usize: usize = index_as_u32 as usize;
-            let row_data: Vec<f64> = _B.row(index_as_usize).iter().cloned().collect();
-            let row_data_mocked: Vec<f64> = B_dense.row(index_as_usize).iter().cloned().collect();
+            let row_data: Vec<f64> = b_mtx.row(index_as_usize).iter().cloned().collect();
+            let row_data_mocked: Vec<f64> = b_dense_mtx.row(index_as_usize).iter().cloned().collect();
 
             assert!(
                 (row_data[1] - row_data_mocked[0]).abs() <= epsilon,

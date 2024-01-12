@@ -19,7 +19,6 @@ use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use nalgebra::Vector2;
-use std::fs;
 use web_sys::console;
 
 pub mod mesh_definition;
@@ -133,7 +132,7 @@ pub fn init_js(file_path_str: String) -> String {
             console::log_1(&format!("MeshProcessor initialized").into());
 
             // Use the cloned file path here
-            let mut uv_mesh: Mesh = processor.create_uv_surface(&file_path_clone);
+            let uv_mesh: Mesh = processor.create_uv_surface(&file_path_clone);
             console::log_1(&format!("UV surface created").into());
 
             let uv_mesh_js = io::convert_uv_mesh_to_string(&uv_mesh, &processor.mesh_tex_coords)
@@ -197,7 +196,7 @@ impl MeshProcessor {
         #[cfg(not(target_arch = "wasm32"))] {
             io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
         }
-        let (boundary_vertices, mut mesh_tex_coords) = parameterize_mesh(&surface_mesh);
+        let (boundary_vertices, mesh_tex_coords) = parameterize_mesh(&surface_mesh);
 
         // Set the fields of the struct
         self.boundary_vertices = boundary_vertices;
@@ -244,7 +243,7 @@ impl MeshProcessor {
         let mut grouped_face_vertices: Vec<Vec<Vector3<f64>>> = Vec::new();
         crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
 
-        let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
+        let tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
         let size = border_map.len();
         for i in 0..size {
             let docking_side: usize = i;
@@ -435,20 +434,6 @@ mod tests {
         }
 
         vertex_degree
-    }
-
-    fn rotate_boundary_vertices(boundary_vertices: &mut Vec<VertexID>, surface_mesh: &Mesh, vertex_degree: &HashMap<VertexID, usize>) {
-        // Rotate the boundary vertices so that the start vertex is at the beginning as in the C++17 code
-        let mut start_vertex = surface_mesh.vertex_iter().next().unwrap();
-        for vertex_id in boundary_vertices.iter() {
-            if vertex_degree.get(&vertex_id) == Some(&7) {
-                start_vertex = *vertex_id;
-            }
-        }
-
-        if let Some(position) = boundary_vertices.iter().position(|&v| v == start_vertex) {
-            boundary_vertices.rotate_left(position);
-        }
     }
 
     #[test]
