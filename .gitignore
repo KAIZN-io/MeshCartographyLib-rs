@@ -51,3 +51,6 @@ vscode.yaml
 
 *_uv*.obj
 test_*.obj
+
+*.html
+*.js
