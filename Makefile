@@ -33,7 +33,7 @@ test:
 
 .PHONY: wasm
 wasm:
-	wasm-pack build
+	wasm-pack build --target web
 
 # Cleaning
 .PHONY: clean

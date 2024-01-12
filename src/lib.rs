@@ -19,6 +19,8 @@ use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use nalgebra::Vector2;
+use std::fs;
+use web_sys::console;
 
 pub mod mesh_definition;
 use crate::mesh_definition::TexCoord;
@@ -62,7 +64,17 @@ impl Hash for VertexPosition {
 }
 
 fn get_mesh_cartography_lib_dir() -> PathBuf {
-    PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
+    // TODO: this is only a temporary solution
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Return a default path when running in WebAssembly
+        PathBuf::from("/Users/jan-piotraschke/git_repos/MeshCartographyLib-rs")
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // Try to get the environment variable in a non-WebAssembly environment
+        PathBuf::from(env::var("Meshes_Dir").expect("MeshCartographyLib_DIR not set"))
+    }
 }
 
 fn create_mesh(vertices_id: Vec<Vector3<f64>>, faces_id: Vec<u32>) -> Mesh {
@@ -109,30 +121,70 @@ pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>
     create_mesh(unique_vertices, face_indices)
 }
 
+#[wasm_bindgen]
+pub fn init_js(file_path_str: String) -> String {
+    // Clone the file path string before passing it to the function
+    let file_path_clone = file_path_str.clone();
+
+    match io::load_mesh_from_js_obj(file_path_str) {
+        Ok(mesh) => {
+            console::log_1(&format!("Mesh loaded successfully").into());
+            let mut processor = MeshProcessor::from_mesh(mesh);
+            console::log_1(&format!("MeshProcessor initialized").into());
+
+            // Use the cloned file path here
+            let mut uv_mesh: Mesh = processor.create_uv_surface(&file_path_clone);
+            console::log_1(&format!("UV surface created").into());
+
+            let uv_mesh_js = io::convert_uv_mesh_to_string(&uv_mesh, &processor.mesh_tex_coords)
+                .expect("Failed to save mesh to file");
+
+            // // Get the uv mesh path
+            // let uv_mesh_path = processor.mesh_uv_path.clone();
+            // let uv_mesh_path = uv_mesh_path.into_os_string().into_string().unwrap();
+
+            // // Open OBJ path and return file content as a string
+            // let uv_mesh_data = fs::read_to_string(uv_mesh_path).expect("Unable to read file");
+
+            // let tessellation_mesh = processor.create_tessellation_mesh(&mut uv_mesh);
+
+            uv_mesh_js
+        }
+        Err(e) => {
+            // Error loading the mesh
+            console::log_1(&format!("Error loading mesh: {}", e).into());
+            format!("Error: {}", e)
+        }
+    }
+}
+
 pub struct MeshProcessor {
     boundary_vertices: Vec<VertexID>,
     mesh_tex_coords: mesh_definition::MeshTexCoords,
     mesh_cartography_lib_dir: PathBuf,
+    pub mesh_uv_path: PathBuf,
     surface_closed: Mesh,
 }
 
 impl MeshProcessor {
-    pub fn new(surface_closed: Mesh)  -> Self {
+    pub fn from_mesh(surface_closed: Mesh)  -> Self {
         // Initialize the struct
-        MeshProcessor {
+        let processor = MeshProcessor {
             boundary_vertices: Vec::new(),
             mesh_tex_coords: mesh_definition::MeshTexCoords::new(&surface_closed),
             mesh_cartography_lib_dir: get_mesh_cartography_lib_dir(),
+            mesh_uv_path: PathBuf::new(),
             surface_closed,
-        }
+        };
+        processor
     }
 
     // Function to create UV surface
-    // #[wasm_bindgen]
     pub fn create_uv_surface(&mut self, mesh_path: &str) -> Mesh {
         let mesh_path = PathBuf::from(mesh_path);
         let save_path = self.mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
         let save_path_uv = self.mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
+        self.mesh_uv_path = save_path_uv.clone();
 
         let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(self.surface_closed.clone());
         let edge_path: Vec<tri_mesh::HalfEdgeID> = cutline_helper.get_gaussian_cutline();
@@ -142,37 +194,43 @@ impl MeshProcessor {
         let surface_mesh = cut_mesh_helper.open_mesh_along_seam(edge_path);
 
         // Save the mesh
-        io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
-
-        let (boundary_vertices, mut mesh_tex_coords) = find_boundary_vertices(&surface_mesh);
+        #[cfg(not(target_arch = "wasm32"))] {
+            io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
+        }
+        let (boundary_vertices, mut mesh_tex_coords) = parameterize_mesh(&surface_mesh);
 
         // Set the fields of the struct
         self.boundary_vertices = boundary_vertices;
         self.mesh_tex_coords = mesh_tex_coords;
 
-        io::save_uv_mesh_as_obj(&surface_mesh, &self.mesh_tex_coords, save_path_uv.clone())
-            .expect("Failed to save mesh to file");
+        #[cfg(not(target_arch = "wasm32"))] {
+            io::save_uv_mesh_as_obj(&surface_mesh, &self.mesh_tex_coords, save_path_uv.clone())
+                .expect("Failed to save mesh to file");
 
-        // Load the mesh and the UV mesh
-        let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
-        let uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+            // Load the mesh and the UV mesh
+            let surface_mesh = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
+            let uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
 
-        // Compute the angle distortion
-        let angle_distortion_helper = mesh_metric::angle_distortion_helper::AngleDistortionHelper::new(&surface_mesh, &uv_mesh);
-        let angle_distortion = angle_distortion_helper.compute_angle_distortion();
-        log::info!("Angle distortion: {}", angle_distortion);
+            // Compute the angle distortion
+            let angle_distortion_helper = mesh_metric::angle_distortion_helper::AngleDistortionHelper::new(&surface_mesh, &uv_mesh);
+            let angle_distortion = angle_distortion_helper.compute_angle_distortion();
+            log::info!("Angle distortion: {}", angle_distortion);
 
-        // Compute the face distortion
-        let face_distortion_helper = mesh_metric::face_distortion_helper::FaceDistortionHelper::new(&surface_mesh, &uv_mesh);
-        let face_distortion = face_distortion_helper.compute_face_distortion();
-        log::info!("Face distortion: {}", face_distortion);
+            // Compute the face distortion
+            let face_distortion_helper = mesh_metric::face_distortion_helper::FaceDistortionHelper::new(&surface_mesh, &uv_mesh);
+            let face_distortion = face_distortion_helper.compute_face_distortion();
+            log::info!("Face distortion: {}", face_distortion);
 
-        // Compute the length distortion
-        let length_distortion_helper = mesh_metric::length_distortion_helper::LengthDistortionHelper::new(&surface_mesh, &uv_mesh);
-        let length_distortion = length_distortion_helper.compute_length_distortion();
-        log::info!("Length distortion: {}", length_distortion);
-
-        uv_mesh
+            // Compute the length distortion
+            let length_distortion_helper = mesh_metric::length_distortion_helper::LengthDistortionHelper::new(&surface_mesh, &uv_mesh);
+            let length_distortion = length_distortion_helper.compute_length_distortion();
+            log::info!("Length distortion: {}", length_distortion);
+            uv_mesh
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            surface_mesh
+        }
     }
 
     // Create the Kachelmuster with Heesch numbers
@@ -228,7 +286,7 @@ impl MeshProcessor {
     }
 }
 
-fn find_boundary_vertices(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
+fn parameterize_mesh(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::MeshTexCoords) {
     let (boundary_edges, length) = get_boundary_edges(surface_mesh);
 
     let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();  // Collect edges in a Vec to maintain order
@@ -344,25 +402,11 @@ fn sort_boundary_vertices(boundary_vertices: &mut Vec<VertexID>, surface_mesh: &
 }
 
 
-#[wasm_bindgen]
-extern {
-    pub fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, py-torch!");
-}
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
     use tri_mesh::vec3;
-    use std::collections::HashSet;
-    use std::iter::FromIterator;
 
     fn count_mesh_degree(surface_mesh: &Mesh) -> HashMap<VertexID, usize> {
         // Iterate over the connected faces
@@ -517,7 +561,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_boundary_vertices() {
+    fn test_parameterize_mesh() {
         let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
         let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();
