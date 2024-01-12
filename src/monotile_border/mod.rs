@@ -14,7 +14,7 @@
 use crate::mesh_definition;
 use crate::mesh_definition::TexCoord;
 use std::collections::HashMap;
-use tri_mesh::{Mesh, VertexID};
+use tri_mesh::VertexID;
 
 pub fn distribute_vertices_around_square(boundary_vertices: &[tri_mesh::VertexID], side_length: f64, tolerance: f64, total_length: f64) -> Vec<TexCoord> {
     let n = boundary_vertices.len();

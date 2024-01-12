@@ -58,11 +58,11 @@ impl MeshCutting {
 
         let mut zigzag_cutline = edge_path.clone();
         for i in 0..(edge_path.len() - 1) {
-            let mut h = edge_path[i];
+            let h = edge_path[i];
             let vertice_after = cutline_vertices[i + 2];
             let mut walker: tri_mesh::Walker<'_> = self.mesh.walker_from_halfedge(h);
 
-            while true {
+            loop {
                 let h_center = walker.as_twin().as_next().halfedge_id().unwrap();
                 let (v1, _) = self.mesh.edge_vertices(h_center);
                 if v1 == vertice_after {

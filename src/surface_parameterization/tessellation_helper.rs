@@ -31,7 +31,7 @@ fn create_twin_border_map(corner_count: usize, current_border: usize) -> HashMap
 pub fn collect_face_vertices(mesh: &Mesh, grouped_face_vertices: &mut Vec<Vec<Vector3<f64>>>) {
     for face_id in mesh.face_iter() {
         let (vertex1, vertex2, vertex3) = mesh.face_vertices(face_id);
-        let mut face_vertex_coords = vec![
+        let face_vertex_coords = vec![
             mesh.position(vertex1),
             mesh.position(vertex2),
             mesh.position(vertex3),
@@ -40,6 +40,7 @@ pub fn collect_face_vertices(mesh: &Mesh, grouped_face_vertices: &mut Vec<Vec<Ve
     }
 }
 
+#[allow(dead_code)]
 pub struct Tessellation {
     border_v_map: HashMap<usize, Vec<VertexID>>,
     border_map: HashMap<usize, Vec<TexCoord>>,
@@ -80,7 +81,7 @@ impl Tessellation {
             if let Some(connection_side_coords) = self.border_map.get(twin_border_map.get(&docking_side).unwrap()) {
                 let mut vec = Vec::new();
                 for pt_2d in connection_side_coords {
-                    let mut transformed_2d = self.custom_rotate(Vector2::new(pt_2d.0, pt_2d.1), angle_radians);
+                    let transformed_2d = self.custom_rotate(Vector2::new(pt_2d.0, pt_2d.1), angle_radians);
                     vec.push(transformed_2d);
                 }
 
@@ -94,7 +95,7 @@ impl Tessellation {
                 for v in mesh.vertex_iter() {
                     let pt_3d = mesh.position(v);
                     let pt_2d = Vector2::new(pt_3d.x, pt_3d.y);
-                    let mut transformed_2d = self.custom_rotate(pt_2d, angle_radians);
+                    let transformed_2d = self.custom_rotate(pt_2d, angle_radians);
 
                     let x = transformed_2d.x + shift_x_coordinates;
                     let y = transformed_2d.y + shift_y_coordinates;
@@ -165,7 +166,7 @@ impl Tessellation {
 
     fn order_data(&self, vec: &mut Vec<Vector2<f64>>) {
         let size = vec.len();
-        let mut x = DVector::from_iterator(size, vec.iter().map(|v| v.x));
+        let x = DVector::from_iterator(size, vec.iter().map(|v| v.x));
         let y = DVector::from_iterator(size, vec.iter().map(|v| v.y));
 
         // Creating the design matrix for linear regression
@@ -191,15 +192,6 @@ impl Tessellation {
                 ta.partial_cmp(&tb).unwrap()
             }
         });
-    }
-
-    fn find_vertex_by_coordinates(&self, mesh: &Mesh, pt: tri_mesh::Vec3) -> Option<VertexID> {
-        for vertex_id in mesh.vertex_iter() {
-            if mesh.position(vertex_id) == pt {
-                return Some(vertex_id);
-            }
-        }
-        None
     }
 }
 

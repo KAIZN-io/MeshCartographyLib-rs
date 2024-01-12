@@ -14,7 +14,6 @@
 use std::path::PathBuf;
 use std::error::Error;
 use std::env;
-use std::fs;
 
 extern crate new_king_lib;
 use new_king_lib::io;
@@ -46,7 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // // Open OBJ path and return file content as a string
     // let data = fs::read_to_string(uv_mesh_path).expect("Unable to read file");
 
-    let tessellation_mesh = processor.create_tessellation_mesh(&mut uv_mesh);
+    processor.create_tessellation_mesh(&mut uv_mesh);
 
     Ok(())
 }

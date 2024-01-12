@@ -36,8 +36,6 @@ pub struct Vector3Custom {
 
 pub struct TriMesh {
     positions: Vec<Vector3Custom>,
-    normals: Option<Vec<Vector3Custom>>,
-    uvs: Option<Vec<Vector3Custom>>,
     indices: Vec<u32>,
 }
 
@@ -69,8 +67,6 @@ fn create_tri_mesh(obj_set: obj::ObjSet) -> std::result::Result<TriMesh, String>
 
     Ok(TriMesh {
         positions,
-        normals: None,
-        uvs: None,
         indices,
     })
 }

@@ -19,7 +19,6 @@ use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use nalgebra::Vector2;
-use std::fs;
 use web_sys::console;
 
 pub mod mesh_definition;
@@ -133,7 +132,7 @@ pub fn init_js(file_path_str: String) -> String {
             console::log_1(&format!("MeshProcessor initialized").into());
 
             // Use the cloned file path here
-            let mut uv_mesh: Mesh = processor.create_uv_surface(&file_path_clone);
+            let uv_mesh: Mesh = processor.create_uv_surface(&file_path_clone);
             console::log_1(&format!("UV surface created").into());
 
             let uv_mesh_js = io::convert_uv_mesh_to_string(&uv_mesh, &processor.mesh_tex_coords)
@@ -197,7 +196,7 @@ impl MeshProcessor {
         #[cfg(not(target_arch = "wasm32"))] {
             io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
         }
-        let (boundary_vertices, mut mesh_tex_coords) = parameterize_mesh(&surface_mesh);
+        let (boundary_vertices, mesh_tex_coords) = parameterize_mesh(&surface_mesh);
 
         // Set the fields of the struct
         self.boundary_vertices = boundary_vertices;
@@ -244,7 +243,7 @@ impl MeshProcessor {
         let mut grouped_face_vertices: Vec<Vec<Vector3<f64>>> = Vec::new();
         crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
 
-        let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
+        let tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
         let size = border_map.len();
         for i in 0..size {
             let docking_side: usize = i;
@@ -437,20 +436,6 @@ mod tests {
         vertex_degree
     }
 
-    fn rotate_boundary_vertices(boundary_vertices: &mut Vec<VertexID>, surface_mesh: &Mesh, vertex_degree: &HashMap<VertexID, usize>) {
-        // Rotate the boundary vertices so that the start vertex is at the beginning as in the C++17 code
-        let mut start_vertex = surface_mesh.vertex_iter().next().unwrap();
-        for vertex_id in boundary_vertices.iter() {
-            if vertex_degree.get(&vertex_id) == Some(&7) {
-                start_vertex = *vertex_id;
-            }
-        }
-
-        if let Some(position) = boundary_vertices.iter().position(|&v| v == start_vertex) {
-            boundary_vertices.rotate_left(position);
-        }
-    }
-
     #[test]
     fn test_dep_mesh_library() {
         // Combine the two vectors into one
@@ -524,7 +509,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(non_snake_case)]
     fn test_neighbors_based_on_L_matrix() {
         let surface_mesh = io::load_test_mesh();
         let (boundary_edges, _) = get_boundary_edges(&surface_mesh);
@@ -532,7 +516,7 @@ mod tests {
         let (boundary_vertices, _) = get_boundary_vertices(&edge_list, &surface_mesh);
 
         let vertex_degree = count_open_mesh_degree(&surface_mesh, &boundary_vertices);
-        let L = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
+        let l_mtx = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
 
         for vertex_id in surface_mesh.vertex_iter() {
             let index_as_u32: u32 = *vertex_id;
@@ -540,7 +524,7 @@ mod tests {
             let expected = vertex_degree.get(&vertex_id).unwrap();
 
             // -1 because the diagonal entry is not counted as it is the vertex itself
-            assert_eq!(L.row(index_as_usize).values().len() - 1, *expected);
+            assert_eq!(l_mtx.row(index_as_usize).values().len() - 1, *expected);
         }
     }
 
@@ -614,15 +598,14 @@ mod tests {
     }
 
     #[test]
-    #[allow(non_snake_case)]
     fn test_boundary_matrix_B_creation() {
         let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
-        let B = surface_parameterization::boundary_matrix::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
+        let b_mtx = surface_parameterization::boundary_matrix::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
 
         let mut num_boundary_vertices = 0;
-        for i in 0..B.nrows() {
-            let row_data: Vec<f64> = B.row(i).iter().cloned().collect();
+        for i in 0..b_mtx.nrows() {
+            let row_data: Vec<f64> = b_mtx.row(i).iter().cloned().collect();
             if surface_mesh.is_vertex_on_boundary(surface_mesh.vertex_iter().nth(i).unwrap()) {
                 num_boundary_vertices += 1;
             } else {
@@ -633,12 +616,11 @@ mod tests {
     }
 
     #[test]
-    #[allow(non_snake_case)]
     fn test_harmonic_parameterization() {
         let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = create_mocked_mesh_tex_coords();
-        let _B = surface_parameterization::boundary_matrix::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
-        let _L = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
+        let _b_mtx = surface_parameterization::boundary_matrix::set_boundary_constraints(&surface_mesh, &mut mesh_tex_coords);
+        let _l_mtx = surface_parameterization::laplacian_matrix::build_laplace_matrix(&surface_mesh, true);
 
         // println!("L: {:?}", L);
 
@@ -663,32 +645,31 @@ mod tests {
     #[test]
     #[allow(unused_mut)]
     #[allow(unused_variables)]
-    #[allow(non_snake_case)]
     fn test_using_mocked_data() {
         let surface_mesh = io::load_test_mesh();
         let mut mesh_tex_coords = mesh_definition::MeshTexCoords::new(&surface_mesh);
 
         // Load B matrix
         let file_path = "test/data/B.csv";
-        let B_dense = io::load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
+        let b_dense_mtx = io::load_csv_to_dmatrix(file_path).expect("Failed to load matrix");
 
         // switch the first with the second column of B_dense
-        let mut B_dense_switched = B_dense.clone();
-        for i in 0..B_dense.nrows() {
-            B_dense_switched[(i, 0)] = B_dense[(i, 1)];
-            B_dense_switched[(i, 1)] = B_dense[(i, 0)];
+        let mut b_dense_mtx_switched = b_dense_mtx.clone();
+        for i in 0..b_dense_mtx.nrows() {
+            b_dense_mtx_switched[(i, 0)] = b_dense_mtx[(i, 1)];
+            b_dense_mtx_switched[(i, 1)] = b_dense_mtx_switched[(i, 0)];
         }
 
         // Load L matrix
         let file_path = "test/data/L_sparse.csv";
-        let L_sparse = io::load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
+        let l_sparse_mtx = io::load_sparse_csv_data_to_csr_matrix(file_path).expect("Failed to load matrix");
 
         // Load is_constrained vector
         let file_path = "test/data/is_constrained.csv";
         let is_constrained = io::load_csv_to_bool_vec(file_path).expect("Failed to load matrix");
 
         // // Solve the linear equation system
-        // let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&L_sparse, &B_dense_switched, is_constrained);
+        // let result = surface_parameterization::harmonic_parameterization_helper::solve_using_qr_decomposition(&l_sparse_mtx, &b_dense_mtx_switched, is_constrained);
 
         // // Assign the result to the mesh
         // match result {

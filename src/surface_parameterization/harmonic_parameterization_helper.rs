@@ -33,7 +33,6 @@ struct Triplet<T> {
 }
 
 
-#[allow(non_snake_case)]
 pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut mesh_definition::MeshTexCoords, use_uniform_weights: bool) {
     // Set which vertices are constrained (i.e. on the boundary)
     let mut is_constrained = Vec::new();
@@ -43,17 +42,17 @@ pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut mesh_definit
 
     // build system matrix (clamp negative cotan weights to zero)
     // 1. Get the local geometry and relationships between the mesh vertices
-    let L = laplacian_matrix::build_laplace_matrix(mesh, use_uniform_weights);
+    let l_mtx = laplacian_matrix::build_laplace_matrix(mesh, use_uniform_weights);
 
     // 2. Inject Boundary Constraints -> sets fixed boundary vertices
-    let B = boundary_matrix::set_boundary_constraints(mesh, mesh_tex_coords);
+    let b_mtx = boundary_matrix::set_boundary_constraints(mesh, mesh_tex_coords);
 
     // 3. Solve the linear equation system
-    let result = solve_using_qr_decomposition(&L, &B, is_constrained);
+    let result = solve_using_qr_decomposition(&l_mtx, &b_mtx, is_constrained);
 
     match result {
-        Ok(X) => {
-            for (vertex_id, row) in mesh.vertex_iter().zip(X.row_iter()) {
+        Ok(x_mtx) => {
+            for (vertex_id, row) in mesh.vertex_iter().zip(x_mtx.row_iter()) {
                 let tex_coord = TexCoord(row[0], row[1]);
                 // println!("tex_coord: {:?} {:?}", row[0], row[1]);
                 mesh_tex_coords.set_tex_coord(vertex_id, tex_coord);
@@ -65,49 +64,48 @@ pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut mesh_definit
     }
 }
 
-#[allow(non_snake_case)]
-pub fn solve_using_qr_decomposition(L: &CsrMatrix<f64>, B: &DMatrix<f64>, is_constrained: Vec<bool>) -> Result<DMatrix<f64>, String> {
-    let nrows = L.nrows();
+pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>, is_constrained: Vec<bool>) -> Result<DMatrix<f64>, String> {
+    let nrows = l_mtx.nrows();
     let mut idx = vec![usize::MAX; nrows];
     let mut n_dofs = 0;
-    let mut BB = DMatrix::zeros(nrows, B.ncols());
+    let mut bb_mtx = DMatrix::zeros(nrows, b_mtx.ncols());
     for i in 0..nrows {
         if !is_constrained[i]{
             idx[i] = n_dofs;
-            BB.set_row(n_dofs, &B.row(i));
+            bb_mtx.set_row(n_dofs, &b_mtx.row(i));
             n_dofs += 1;
         }
     }
 
-    BB.resize_mut(n_dofs, B.ncols(), 0.0); // Resize BB after filling it
+    bb_mtx.resize_mut(n_dofs, b_mtx.ncols(), 0.0); // Resize BB after filling it
 
     // collect entries for reduced matrix
     // update rhs with constraints
-    let sparse_matrix_triplets: Vec<Triplet<f64>> = get_tripplets(&L, &B, &mut BB, &idx);
+    let sparse_matrix_triplets: Vec<Triplet<f64>> = get_tripplets(&l_mtx, &b_mtx, &mut bb_mtx, &idx);
 
-    let dense_matrix = build_dense_matrix(&sparse_matrix_triplets, BB.nrows());
+    let dense_matrix = build_dense_matrix(&sparse_matrix_triplets, bb_mtx.nrows());
 
     // Solve the system Lxx = BB using LU decomposition
     let lu = LU::new(dense_matrix.clone());
-    let xx = lu.solve(&BB)
+    let xx = lu.solve(&bb_mtx)
         .ok_or("Failed to solve the system using LU decomposition")?;
 
     // Fill in the solution X
-    let mut X = DMatrix::zeros(B.nrows(), B.ncols());
-    for i in 0..L.nrows() {
-        for j in 0..B.ncols() {
-            X[(i, j)] = if idx[i] == usize::MAX { B[(i, j)] } else { xx[(idx[i], j)] };
+    let mut x_mtx = DMatrix::zeros(b_mtx.nrows(), b_mtx.ncols());
+    for i in 0..l_mtx.nrows() {
+        for j in 0..b_mtx.ncols() {
+            x_mtx[(i, j)] = if idx[i] == usize::MAX { b_mtx[(i, j)] } else { xx[(idx[i], j)] };
         }
     }
 
-    Ok(X)
+    Ok(x_mtx)
 }
 
 
 /// A COO Sparse matrix stores entries in coordinate-form, that is triplets (i, j, v), where i and j correspond to row and column indices of the entry, and v to the value of the entry
-fn get_tripplets(L: &CsrMatrix<f64>, B: &DMatrix<f64>, BB: &mut DMatrix<f64>, idx: &[usize]) -> Vec<Triplet<f64>> {
+fn get_tripplets(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>, bb_mtx: &mut DMatrix<f64>, idx: &[usize]) -> Vec<Triplet<f64>> {
     let mut sparse_matrix_triplets: Vec<Triplet<f64>> = Vec::new();
-    for triplet in L.triplet_iter() {
+    for triplet in l_mtx.triplet_iter() {
         let i = triplet.0;
         let j = triplet.1;
         let v = triplet.2;
@@ -117,8 +115,8 @@ fn get_tripplets(L: &CsrMatrix<f64>, B: &DMatrix<f64>, BB: &mut DMatrix<f64>, id
                 sparse_matrix_triplets.push(Triplet { row: idx[i], col: idx[j], value: *v });
             } else { // col is constraint
                 // Update B
-                for col in 0..B.ncols() {
-                    BB[(idx[i], col)] -= v * B[(j, col)];
+                for col in 0..b_mtx.ncols() {
+                    bb_mtx[(idx[i], col)] -= v * b_mtx[(j, col)];
                 }
             }
         }
