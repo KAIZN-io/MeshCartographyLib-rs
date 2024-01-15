@@ -8,7 +8,7 @@
 //!
 //! ## Current Status
 //!
-//! - **Bugs:** - The opening of the mesh along the cut line is not working properly
+//! - **Bugs:** -
 //! - **Todo:** -
 
 // Import necessary modules and types
@@ -329,10 +329,6 @@ fn get_boundary_edges(surface_mesh: &Mesh) -> (Vec<(VertexID, VertexID)>, f64) {
             i += 1;
         }
     }
-
-    // ! TODO: zu viele boundary edges -> das mesh wurde also nicht richtig geöffnet
-    println!("found {} boundary edges", i);
-    // TODO: alle entsprechenden vertices coordinates ausdrucken und über Julia visualisieren
 
     (boundary_edges, length)
 }
