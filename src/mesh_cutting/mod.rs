@@ -1,4 +1,5 @@
-use tri_mesh::{Mesh, VertexID, FaceID, Vector3};
+use tri_mesh::{Mesh, VertexID, Vector3};
+use std::collections::HashSet;
 
 pub struct MeshCutting {
     mesh: Mesh,
@@ -9,15 +10,76 @@ impl MeshCutting {
         MeshCutting { mesh }
     }
 
-    fn create_mesh(&self, vertices_id: Vec<Vector3<f64>>, faces_id: Vec<u32>) -> Mesh {
-        Mesh::new(&three_d_asset::TriMesh {
-            positions: three_d_asset::Positions::F64(vertices_id),
-            indices: three_d_asset::Indices::U32(faces_id),
-            ..Default::default()
-        })
+    pub fn open_mesh_along_seam(&self, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Mesh {
+
+        // 1. Find all halfedges that are inside the affected faces
+        let zigzag_cutline = self.collect_zigzag_cutline(edge_path.clone());
+
+        // ! TODO: refactor this as we only need this information and not that which is provided by zigzag_cutline
+        // 1.1 collect the vertices of the zigzag cutline
+        let mut zigzag_cutline_vertices = Vec::new();
+        let mut unique_vertices = HashSet::new();
+
+        for h in zigzag_cutline.iter() {
+            let (v0, v1) = self.mesh.edge_vertices(*h);
+
+            if unique_vertices.insert(v0) {
+                zigzag_cutline_vertices.push(v0);
+            }
+            if unique_vertices.insert(v1) {
+                zigzag_cutline_vertices.push(v1);
+            }
+        }
+
+        // 3. Get all vertices of the open mesh
+        let vertex_coord = self.collect_vertex_position(edge_path.clone());
+
+        // 4. Assign new vertex indices to the affected faces
+        let mut face_id = Vec::new();
+        for f in self.mesh.face_iter() {
+            // 3.1 Get the vertices of the face
+            let (v0, v1, v2) = self.mesh.face_vertices(f);
+
+            let mut v0_u32 = *v0;
+            let mut v1_u32 = *v1;
+            let mut v2_u32 = *v2;
+
+            let v0_in_zigzag = zigzag_cutline_vertices.contains(&v0);
+            let v1_in_zigzag = zigzag_cutline_vertices.contains(&v1);
+            let v2_in_zigzag = zigzag_cutline_vertices.contains(&v2);
+
+            if v0_in_zigzag && v1_in_zigzag && v2_in_zigzag {
+                // Process each vertex separately by getting the second index of the vertex_coord which will be the newly added vertex
+                if let Some((index, _)) = vertex_coord.iter().enumerate()
+                    .filter(|&(_, v)| *v == self.mesh.position(v0))
+                    .nth(1) {
+                        v0_u32 = index as u32;
+                }
+
+
+                if let Some((index, _)) = vertex_coord.iter().enumerate()
+                    .filter(|&(_, v)| *v == self.mesh.position(v1))
+                    .nth(1) {
+                        v1_u32 = index as u32;
+                }
+
+                if let Some((index, _)) = vertex_coord.iter().enumerate()
+                    .filter(|&(_, v)| *v == self.mesh.position(v2))
+                    .nth(1) {
+                        v2_u32 = index as u32;
+                }
+            }
+
+            face_id.push(v0_u32);
+            face_id.push(v1_u32);
+            face_id.push(v2_u32);
+        }
+
+        // Finally: Assemble the mesh
+        self.create_mesh(vertex_coord, face_id)
     }
 
-    fn collect_v_positions(&self, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Vec<Vector3<f64>> {
+    fn collect_vertex_position(&self, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Vec<Vector3<f64>> {
         // 0.1 Add all old vertices
         let mut vertex_coord = Vec::new();
         for vertex_id in self.mesh.vertex_iter() {
@@ -74,76 +136,11 @@ impl MeshCutting {
         zigzag_cutline
     }
 
-    fn get_affected_faces(&self, zigzag_cutline: Vec<tri_mesh::HalfEdgeID>) -> Vec<FaceID> {
-        let mut affected_faces = Vec::new();
-        for f in self.mesh.face_iter() {
-            let mut walker = self.mesh.walker_from_face(f);
-
-            let h0 = walker.halfedge_id().unwrap();
-            let h1 = walker.as_next().halfedge_id().unwrap();
-            let h2 = walker.as_previous().halfedge_id().unwrap();
-
-            // find if h0, h1 or h2 is in zigzag_cutline
-            let h0_exists = zigzag_cutline.contains(&h0);
-            let h1_exists = zigzag_cutline.contains(&h1);
-            let h2_exists = zigzag_cutline.contains(&h2);
-
-            if h0_exists || h1_exists || h2_exists {
-                affected_faces.push(f);
-            }
-        }
-        affected_faces
-    }
-
-    pub fn open_mesh_along_seam(&self, edge_path: Vec<tri_mesh::HalfEdgeID>) -> Mesh {
-
-        // 0. Get all vertices of the open mesh
-        let vertex_coord = self.collect_v_positions(edge_path.clone());
-
-        // 1. Find all halfedges that are inside the affected faces
-        let zigzag_cutline = self.collect_zigzag_cutline(edge_path.clone());
-
-        // 2. Get the affected faces where at least one halfedge from zigzag_cutline is inside
-        let affected_faces = self.get_affected_faces(zigzag_cutline.clone());
-
-        // 3. Assign new vertex indices to the affected faces
-        let mut face_id = Vec::new();
-        for f in self.mesh.face_iter() {
-            // 3.1 Get the vertices of the face
-            let (v0, v1, v2) = self.mesh.face_vertices(f);
-
-            let mut v0_u32 = *v0;
-            let mut v1_u32 = *v1;
-            let mut v2_u32 = *v2;
-
-            // if the face is affected -> if f is inside affected_faces
-            if affected_faces.contains(&f) {
-                // Process each vertex separately by getting the second index of the vertex_coord which will be the newly added vertex
-                if let Some((index, _)) = vertex_coord.iter().enumerate()
-                    .filter(|&(_, v)| *v == self.mesh.position(v0))
-                    .nth(1) {
-                        v0_u32 = index as u32;
-                }
-
-
-                if let Some((index, _)) = vertex_coord.iter().enumerate()
-                    .filter(|&(_, v)| *v == self.mesh.position(v1))
-                    .nth(1) {
-                        v1_u32 = index as u32;
-                }
-
-                if let Some((index, _)) = vertex_coord.iter().enumerate()
-                    .filter(|&(_, v)| *v == self.mesh.position(v2))
-                    .nth(1) {
-                        v2_u32 = index as u32;
-                }
-            }
-            face_id.push(v0_u32);
-            face_id.push(v1_u32);
-            face_id.push(v2_u32);
-        }
-
-        // Finally: Assemble the mesh
-        self.create_mesh(vertex_coord, face_id)
+    fn create_mesh(&self, vertices_id: Vec<Vector3<f64>>, faces_id: Vec<u32>) -> Mesh {
+        Mesh::new(&three_d_asset::TriMesh {
+            positions: three_d_asset::Positions::F64(vertices_id),
+            indices: three_d_asset::Indices::U32(faces_id),
+            ..Default::default()
+        })
     }
 }
