@@ -1,4 +1,4 @@
-use tri_mesh::{Mesh, VertexID, FaceID, Vector3};
+use tri_mesh::{Mesh, VertexID, Vector3};
 use std::collections::HashSet;
 
 pub struct MeshCutting {
