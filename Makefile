@@ -21,6 +21,7 @@ build_rust:
 .PHONY: run
 run:
 	@echo "Running with file path: $(FILE_PATH)"
+	$(eval FILE_PATH ?= ./test/meshes/ellipsoid_x4.obj)
 	RUST_LOG=info cargo run --release -- $(FILE_PATH)
 
 .PHONY: doc
