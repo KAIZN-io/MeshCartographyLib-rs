@@ -292,3 +292,37 @@ pub fn load_csv_to_bool_vec(file_path: &str) -> std::result::Result<Vec<bool>, B
 
     Ok(bools)
 }
+
+pub fn load_mesh_vertices(filepath: PathBuf) -> Vec<Vec<f64>> {
+    let mesh = load_mesh_from_obj(filepath).unwrap();
+
+    if mesh.no_vertices() == 0 {
+        panic!("No vertices in mesh");
+    }
+
+    let mut vertices_data = Vec::new();
+
+    for vertex_id in mesh.vertex_iter() {
+        let p = mesh.vertex_position(vertex_id);
+        vertices_data.push(vec![p.x, p.y, p.z]);
+    }
+
+    vertices_data
+}
+
+pub fn load_mesh_faces(filepath: PathBuf) -> Vec<Vec<i32>> {
+    let mesh = load_mesh_from_obj(filepath).unwrap();
+
+    if mesh.no_faces() == 0 {
+        panic!("No faces in mesh");
+    }
+
+    let mut faces_data = Vec::new();
+
+    for f in mesh.face_iter() {
+        let (v0, v1, v2) = mesh.face_vertices(f);
+        faces_data.push(vec![*v0 as i32, *v1 as i32, *v2 as i32]);
+    }
+
+    faces_data
+}
