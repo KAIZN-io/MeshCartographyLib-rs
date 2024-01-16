@@ -12,14 +12,14 @@
 //! - **Todo:** -
 
 use std::fs::File;
-use std::io::{Write, Result};
+use std::io::{self, Read, Write, Result, BufRead};
 use std::path::PathBuf;
 use csv::ReaderBuilder;
+use csv::Writer;
 use std::error::Error;
 use nalgebra_sparse::{CsrMatrix, coo::CooMatrix};
 use nalgebra::DMatrix;
 use std::env;
-use std::io::Read;
 
 use wavefront_obj::obj::{self, Primitive};
 use three_d_asset::{Positions, TriMesh as ThreeDTriMesh};
@@ -205,6 +205,45 @@ pub fn convert_uv_mesh_to_string(mesh: &tri_mesh::Mesh, mesh_tex_coords: &mesh_d
     }
 
     Ok(obj_data)
+}
+
+pub fn save_to_csv(matrix: &[Vec<Option<i32>>], file_path: PathBuf) -> std::result::Result<(), Box<dyn Error>> {
+    let mut wtr = Writer::from_writer(File::create(file_path)?);
+
+    for (i, row) in matrix.iter().enumerate() {
+        let row_slice = &row[..=i];  // Take elements from the start to the diagonal (inclusive)
+        let row_str: Vec<String> = row_slice.iter().map(|&v| v.map_or("".to_string(), |val| val.to_string())).collect();
+        wtr.write_record(&row_str)?;
+    }
+
+    wtr.flush()?;
+    Ok(())
+}
+
+pub fn load_from_csv(file_path: PathBuf) -> std::result::Result<Vec<Vec<Option<i32>>>, Box<dyn Error>> {
+    let file = File::open(file_path)?;
+    let reader = io::BufReader::new(file);
+    let mut lower_triangular: Vec<Vec<Option<i32>>> = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let row: Vec<Option<i32>> = line.split(',')
+            .map(|e| e.trim().parse().ok())
+            .collect();
+        lower_triangular.push(row);
+    }
+
+    let matrix_size = lower_triangular.len();
+    let mut matrix: Vec<Vec<Option<i32>>> = vec![vec![None; matrix_size]; matrix_size];
+
+    for i in 0..matrix_size {
+        for j in 0..lower_triangular[i].len() {
+            matrix[i][j] = lower_triangular[i][j];
+            matrix[j][i] = lower_triangular[i][j]; // Mirror across the diagonal
+        }
+    }
+
+    Ok(matrix)
 }
 
 #[allow(dead_code)]
