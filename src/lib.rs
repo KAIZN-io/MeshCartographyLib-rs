@@ -163,6 +163,8 @@ pub struct MeshProcessor {
     mesh_cartography_lib_dir: PathBuf,
     pub mesh_uv_path: PathBuf,
     surface_closed: Mesh,
+    pub vertice_3_d: Vec<Vector3<f64>>,
+    pub vertice_uv: Vec<Vector3<f64>>,
 }
 
 impl MeshProcessor {
@@ -174,6 +176,8 @@ impl MeshProcessor {
             mesh_cartography_lib_dir: get_mesh_cartography_lib_dir(),
             mesh_uv_path: PathBuf::new(),
             surface_closed,
+            vertice_3_d: Vec::new(),
+            vertice_uv: Vec::new(),
         };
         processor
     }
@@ -201,6 +205,15 @@ impl MeshProcessor {
         // Set the fields of the struct
         self.boundary_vertices = boundary_vertices;
         self.mesh_tex_coords = mesh_tex_coords;
+
+        for i in 0..surface_mesh.no_vertices() {
+            let vertex_id = surface_mesh.vertex_iter().nth(i).unwrap();
+            let position = surface_mesh.vertex_position(vertex_id);
+            self.vertice_3_d.push(Vector3::new(position.x, position.y, position.z));
+
+            let tex_coord = self.mesh_tex_coords.get_tex_coord(vertex_id).unwrap();
+            self.vertice_uv.push(Vector3::new(tex_coord.0, tex_coord.1, 0.0));
+        }
 
         #[cfg(not(target_arch = "wasm32"))] {
             io::save_uv_mesh_as_obj(&surface_mesh, &self.mesh_tex_coords, save_path_uv.clone())
@@ -319,14 +332,12 @@ fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &[VertexID], len
 fn get_boundary_edges(surface_mesh: &Mesh) -> (Vec<(VertexID, VertexID)>, f64) {
     let mut boundary_edges = Vec::new();
     let mut length = 0.0;
-    let mut i = 0;
 
     for edge in surface_mesh.edge_iter() {
         let (v0, v1) = surface_mesh.edge_vertices(edge);
         if surface_mesh.is_vertex_on_boundary(v0) && surface_mesh.is_vertex_on_boundary(v1) {
             boundary_edges.push((v0, v1));
             length += surface_mesh.edge_length(edge);
-            i += 1;
         }
     }
 
