@@ -27,7 +27,7 @@ use crate::mesh_definition::TexCoord;
 pub mod io;
 mod monotile_border;
 
-mod geodesic_distance {
+pub mod geodesic_distance {
     pub mod cached_geodesic_distance_helper;
     pub mod dijkstra_distance_helper;
     pub mod gaussian_cut_line_helper;
