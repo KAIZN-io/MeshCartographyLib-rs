@@ -58,6 +58,10 @@ impl Tessellation {
         }
     }
 
+    pub fn get_border(&self) -> &HashMap<usize, Vec<TexCoord>> {
+        &self.border_map
+    }
+
     pub fn rotate_and_shift_mesh(&self, mesh: &mut tri_mesh::Mesh, angle_degrees: f64, docking_side: usize) {
         let angle_radians = angle_degrees.to_radians();
 
