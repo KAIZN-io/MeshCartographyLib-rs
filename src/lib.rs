@@ -41,7 +41,7 @@ mod mesh_metric {
     pub mod length_distortion_helper;
 }
 
-pub mod surface_parameterization {
+mod surface_parameterization {
     pub mod boundary_matrix;
     pub mod laplacian_matrix;
     pub mod harmonic_parameterization_helper;
@@ -167,6 +167,7 @@ pub struct MeshProcessor {
     surface_closed: Mesh,
     pub vertice_3_d: Vec<Vector3<f64>>,
     pub vertice_uv: Vec<Vector3<f64>>,
+    pub border: HashMap<usize, Vec<TexCoord>>,
 }
 
 impl MeshProcessor {
@@ -180,6 +181,7 @@ impl MeshProcessor {
             surface_closed,
             vertice_3_d: Vec::new(),
             vertice_uv: Vec::new(),
+            border: HashMap::new(),
         };
         processor
     }
@@ -291,6 +293,8 @@ impl MeshProcessor {
 
         // Add the meshes together
         let tessellation_mesh = create_mesh_from_grouped_vertices(grouped_face_vertices);
+        let border: &HashMap<usize, Vec<TexCoord>> = tessellation.get_border();
+        self.border = border.clone();
 
         // Save the mesh
         for vertex_id in tessellation_mesh.vertex_iter() {
@@ -300,6 +304,10 @@ impl MeshProcessor {
             .expect("Failed to save mesh to file");
 
         tessellation_mesh
+    }
+
+    pub fn get_border(&self) -> &HashMap<usize, Vec<TexCoord>> {
+        &self.border
     }
 }
 
