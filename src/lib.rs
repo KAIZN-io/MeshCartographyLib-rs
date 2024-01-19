@@ -41,7 +41,7 @@ mod mesh_metric {
     pub mod length_distortion_helper;
 }
 
-mod surface_parameterization {
+pub mod surface_parameterization {
     pub mod boundary_matrix;
     pub mod laplacian_matrix;
     pub mod harmonic_parameterization_helper;
