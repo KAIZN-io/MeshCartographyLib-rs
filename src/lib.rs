@@ -168,6 +168,7 @@ pub struct MeshProcessor {
     pub vertice_3_d: Vec<Vector3<f64>>,
     pub vertice_uv: Vec<Vector3<f64>>,
     pub border: HashMap<usize, Vec<TexCoord>>,
+    pub twin_border_map: HashMap<usize, usize>,
 }
 
 impl MeshProcessor {
@@ -182,6 +183,7 @@ impl MeshProcessor {
             vertice_3_d: Vec::new(),
             vertice_uv: Vec::new(),
             border: HashMap::new(),
+            twin_border_map: HashMap::new(),
         };
         processor
     }
@@ -263,7 +265,7 @@ impl MeshProcessor {
         let mut grouped_face_vertices: Vec<Vec<Vector3<f64>>> = Vec::new();
         crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
 
-        let tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
+        let mut tessellation = crate::surface_parameterization::tessellation_helper::Tessellation::new(border_v_map.clone(), border_map.clone());
         let size = border_map.len();
         for i in 0..size {
             let docking_side: usize = i;
@@ -293,8 +295,10 @@ impl MeshProcessor {
 
         // Add the meshes together
         let tessellation_mesh = create_mesh_from_grouped_vertices(grouped_face_vertices);
-        let border: &HashMap<usize, Vec<TexCoord>> = tessellation.get_border();
+
+        let (border, twin_border_map) = tessellation.get_border();
         self.border = border.clone();
+        self.twin_border_map = twin_border_map.clone();
 
         // Save the mesh
         for vertex_id in tessellation_mesh.vertex_iter() {
@@ -306,8 +310,8 @@ impl MeshProcessor {
         tessellation_mesh
     }
 
-    pub fn get_border(&self) -> &HashMap<usize, Vec<TexCoord>> {
-        &self.border
+    pub fn get_border(&self) -> (&HashMap<usize, Vec<TexCoord>>, &HashMap<usize, usize>) {
+        (&self.border, &self.twin_border_map)
     }
 }
 

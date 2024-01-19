@@ -45,6 +45,7 @@ pub struct Tessellation {
     border_v_map: HashMap<usize, Vec<VertexID>>,
     border_map: HashMap<usize, Vec<TexCoord>>,
     monotile_border_v: usize,
+    twin_border_map: HashMap<usize, usize>,
 }
 
 impl Tessellation {
@@ -55,20 +56,22 @@ impl Tessellation {
             border_v_map,
             border_map,
             monotile_border_v,
+            twin_border_map: HashMap::new(),
         }
     }
 
-    pub fn get_border(&self) -> &HashMap<usize, Vec<TexCoord>> {
-        &self.border_map
+    pub fn get_border(&self) -> (&HashMap<usize, Vec<TexCoord>>, &HashMap<usize, usize>){
+        (&self.border_map, &self.twin_border_map)
     }
 
-    pub fn rotate_and_shift_mesh(&self, mesh: &mut tri_mesh::Mesh, angle_degrees: f64, docking_side: usize) {
+    pub fn rotate_and_shift_mesh(&mut self, mesh: &mut tri_mesh::Mesh, angle_degrees: f64, docking_side: usize) {
         let angle_radians = angle_degrees.to_radians();
 
         // Todo: make this global
         let current_border = 3;
         let corner_count = 4;
-        let twin_border_map = create_twin_border_map(corner_count, current_border);
+        let twin_border_map: HashMap<usize, usize> = create_twin_border_map(corner_count, current_border);
+        self.twin_border_map = twin_border_map.clone();
 
         // Get the border of the mesh and convert it to Vec<Vector2<f64>>
         if let Some(main_border_coords) = self.border_map.get(&docking_side) {
