@@ -207,8 +207,6 @@ impl MeshProcessor {
             io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
         }
 
-        let distance_matrix = geodesic_distance::cached_geodesic_distance_helper::get_mesh_distance_matrix(mesh_path.clone()).unwrap();
-
         let (boundary_vertices, mesh_tex_coords) = parameterize_mesh(&surface_mesh);
 
         // Set the fields of the struct
