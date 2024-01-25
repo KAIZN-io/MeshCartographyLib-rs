@@ -12,8 +12,7 @@ impl MeshAnalysis {
     }
 
     pub fn get_gaussian_cutline(&self) -> Vec<tri_mesh::HalfEdgeID> {
-        let vertex_id: VertexID = self.vertex_with_highest_curvature();
-        let second_highest = self.vertex_with_second_highest_curvature();
+        let (vertex_id, second_highest) = self.get_two_highest_cones();
 
         let successors = |&node: &usize| -> Vec<(usize, i32)> {
             self.mesh.edge_iter()
@@ -95,22 +94,7 @@ impl MeshAnalysis {
         curvatures
     }
 
-    pub fn vertex_with_highest_curvature(&self) -> VertexID {
-        let curvatures = self.calculate_gaussian_curvature();
-        let mut max_curvature = f64::MIN;
-        let mut vertex_id_with_max_curvature = self.mesh.vertex_iter().next().unwrap();
-
-        for (i, &curvature) in curvatures.iter().enumerate() {
-            if curvature > max_curvature {
-                max_curvature = curvature;
-                vertex_id_with_max_curvature = self.mesh.vertex_iter().nth(i).unwrap();
-            }
-        }
-
-        vertex_id_with_max_curvature
-    }
-
-    pub fn vertex_with_second_highest_curvature(&self) -> VertexID {
+    pub fn get_two_highest_cones(&self) -> (VertexID, VertexID) {
         let curvatures = self.calculate_gaussian_curvature();
         let mut max_curvature = f64::MIN;
         let mut second_max_curvature = f64::MIN;
@@ -135,7 +119,7 @@ impl MeshAnalysis {
             }
         }
 
-        vertex_id_with_second_max_curvature
+        (vertex_id_with_max_curvature, vertex_id_with_second_max_curvature)
     }
 
     fn face_contains_vertex(&self, face_id: FaceID, vertex_id: VertexID) -> bool {
