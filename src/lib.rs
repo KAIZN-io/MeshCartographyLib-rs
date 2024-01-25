@@ -30,6 +30,7 @@ mod monotile_border;
 pub mod geodesic_distance {
     pub mod cached_geodesic_distance_helper;
     pub mod dijkstra_distance_helper;
+    pub mod gaussian_curvature;
     pub mod gaussian_cut_line_helper;
 }
 
