@@ -191,8 +191,9 @@ impl MeshProcessor {
     // Function to create UV surface
     pub fn create_uv_surface(&mut self, mesh_path: &str) -> Mesh {
         let mesh_path = PathBuf::from(mesh_path);
-        let save_path = self.mesh_cartography_lib_dir.join("ellipsoid_x4_open.obj");
-        let save_path_uv = self.mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
+        let mesh_file_name = mesh_path.file_stem().unwrap().to_str().unwrap().to_string();
+        let save_path = self.mesh_cartography_lib_dir.join(format!("{}_open.obj", mesh_file_name));
+        let save_path_uv = self.mesh_cartography_lib_dir.join(format!("{}_uv.obj", mesh_file_name));
         self.mesh_uv_path = save_path_uv.clone();
 
         let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(self.surface_closed.clone());
@@ -255,10 +256,9 @@ impl MeshProcessor {
     // Create the Kachelmuster with Heesch numbers
     pub fn create_tessellation_mesh(&mut self, uv_mesh_centre: &mut Mesh) -> Mesh {
         // ! Temp: load the uv_mesh
-        let save_path_uv = self.mesh_cartography_lib_dir.join("ellipsoid_x4_uv.obj");
-
         let (border_v_map, border_map) = monotile_border::get_sub_borders(&self.boundary_vertices, &self.mesh_tex_coords);
-        let save_path_uv2 = self.mesh_cartography_lib_dir.join("ellipsoid_x4_uv_tessellation.obj");
+        let mesh_file_name = self.mesh_uv_path.file_stem().unwrap().to_str().unwrap().to_string();
+        let save_path_uv2 = self.mesh_cartography_lib_dir.join(format!("{}_tessellation.obj", mesh_file_name));
 
         let mut grouped_face_vertices: Vec<Vec<Vector3<f64>>> = Vec::new();
         crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh_centre, &mut grouped_face_vertices);
@@ -283,7 +283,7 @@ impl MeshProcessor {
 
             let rotation_angle = tessellation.calculate_angle(&border1, &border2);
             // ! Temp: load the uv_mesh
-            let mut uv_mesh = io::load_mesh_from_obj(save_path_uv.clone()).unwrap();
+            let mut uv_mesh = io::load_mesh_from_obj(self.mesh_uv_path.clone()).unwrap();
             tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
             log::info!("docking_side: {}", docking_side);
 
