@@ -1,6 +1,6 @@
 use tri_mesh::{Mesh, VertexID};
 use pathfinding::prelude::dijkstra;
-use crate::geodesic_distance::gaussian_curvature::GaussianCurvature;
+use crate::geodesic_distance::curvature_helper::CurvatureAnalyzer;
 
 pub struct MeshAnalysis {
     mesh: Mesh,
@@ -69,7 +69,7 @@ impl MeshAnalysis {
     }
 
     fn get_two_highest_cones(&self) -> (VertexID, VertexID) {
-        let gaussian_curvature = GaussianCurvature::new(self.mesh.clone());
+        let gaussian_curvature = CurvatureAnalyzer::new(self.mesh.clone());
         let curvatures = gaussian_curvature.calculate_gaussian_curvature();
 
         let mut max_curvature = f64::MIN;

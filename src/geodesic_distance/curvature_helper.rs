@@ -1,13 +1,13 @@
 use tri_mesh::{Mesh, VertexID, FaceID, Vec3};
 use nalgebra as na;
 
-pub struct GaussianCurvature {
+pub struct CurvatureAnalyzer {
     mesh: Mesh,
 }
 
-impl GaussianCurvature {
+impl CurvatureAnalyzer {
     pub fn new(mesh: Mesh) -> Self {
-        GaussianCurvature { mesh }
+        CurvatureAnalyzer { mesh }
     }
 
     pub fn calculate_gaussian_curvature(&self) -> Vec<f64> {
@@ -89,7 +89,7 @@ mod tests {
     #[test]
     fn test_calculate_angles_for_known_triangle() {
         let mesh = io::load_test_mesh_closed();
-        let mesh_analysis = super::GaussianCurvature::new(mesh);
+        let mesh_analysis = super::CurvatureAnalyzer::new(mesh);
 
         // Right-angled triangle (3-4-5 triangle)
         let face_positions = (
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn test_calculate_angles_for_equilateral_triangle() {
         let mesh = io::load_test_mesh_closed();
-        let mesh_analysis = super::GaussianCurvature::new(mesh);
+        let mesh_analysis = super::CurvatureAnalyzer::new(mesh);
 
         // Equilateral triangle (sides of length 1)
         let face_positions = (
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn test_calculate_angles_for_isosceles_triangle() {
         let mesh = io::load_test_mesh_closed();
-        let mesh_analysis = super::GaussianCurvature::new(mesh);
+        let mesh_analysis = super::CurvatureAnalyzer::new(mesh);
 
         // Isosceles Triangle
         let face_positions = (
@@ -148,7 +148,7 @@ mod tests {
     #[test]
     fn test_calculate_angles_for_scalene_triangle() {
         let mesh = io::load_test_mesh_closed();
-        let mesh_analysis = super::GaussianCurvature::new(mesh);
+        let mesh_analysis = super::CurvatureAnalyzer::new(mesh);
 
         // Scalene Triangle
         let face_positions = (
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_calculate_angle() {
         let mesh = io::load_test_mesh_closed();
-        let mesh_analysis = super::GaussianCurvature::new(mesh);
+        let mesh_analysis = super::CurvatureAnalyzer::new(mesh);
 
         // Test with a known triangle (e.g., 3-4-5 triangle)
         let angle = mesh_analysis.calculate_angle(3.0, 4.0, 5.0);
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn test_gaussian_curvature() {
         let mesh = io::load_test_mesh_closed();
-        let mesh_analysis = super::GaussianCurvature::new(mesh);
+        let mesh_analysis = super::CurvatureAnalyzer::new(mesh);
         let curvatures = mesh_analysis.calculate_gaussian_curvature();
 
         // for (i, &curvature) in curvatures.iter().enumerate() {
