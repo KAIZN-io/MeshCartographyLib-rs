@@ -11,7 +11,7 @@
 //! - **Bugs:** -
 //! - **Todo:** Improve the speed of the QR decomposition.
 
-use nalgebra::{DMatrix, LU};
+use nalgebra::{DMatrix, Cholesky};
 use nalgebra_sparse::CsrMatrix;
 use num_traits::Zero;
 use std::collections::HashMap;
@@ -85,10 +85,9 @@ pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>
 
     let dense_matrix = build_dense_matrix(&sparse_matrix_triplets, bb_mtx.nrows());
 
-    // Solve the system Lxx = BB using LU decomposition
-    let lu = LU::new(dense_matrix.clone());
-    let xx = lu.solve(&bb_mtx)
-        .ok_or("Failed to solve the system using LU decomposition")?;
+    // Solve the system Lxx = BB using Cholesky decomposition
+    let cholesky = Cholesky::new(dense_matrix.clone()).unwrap();
+    let xx = cholesky.solve(&bb_mtx);
 
     // Fill in the solution X
     let mut x_mtx = DMatrix::zeros(b_mtx.nrows(), b_mtx.ncols());
