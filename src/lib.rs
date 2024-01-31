@@ -11,6 +11,12 @@
 //! - **Bugs:** -
 //! - **Todo:** -
 
+#[macro_use]
+extern crate log;
+use oslog::OsLogger;
+use log::LevelFilter;
+use web_sys::console;
+
 // Import necessary modules and types
 use wasm_bindgen::prelude::*;
 use std::env;
@@ -19,7 +25,6 @@ use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use nalgebra::Vector2;
-use web_sys::console;
 
 pub mod mesh_definition;
 use crate::mesh_definition::TexCoord;
@@ -62,6 +67,17 @@ impl Hash for VertexPosition {
         x.hash(state);
         y.hash(state);
         z.hash(state);
+    }
+}
+
+// This function initializes the logger and is intended to be called from main.rs
+pub fn init_logger() {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        OsLogger::new("com.kaizn.meshcartography")
+            .level_filter(LevelFilter::Info)
+            .init()
+            .unwrap();
     }
 }
 

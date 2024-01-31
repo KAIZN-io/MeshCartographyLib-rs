@@ -17,10 +17,11 @@ use std::env;
 
 extern crate mesh_cartography_lib;
 use mesh_cartography_lib::io;
+use log::info;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Initialize logger
-    env_logger::init();
+    mesh_cartography_lib::init_logger();
+    info!("Logger initialized.");
 
     let args: Vec<String> = env::args().collect();
 
