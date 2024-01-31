@@ -14,26 +14,21 @@
 use nalgebra::{DMatrix, Cholesky};
 use nalgebra_sparse::CsrMatrix;
 use num_traits::Zero;
-use std::collections::HashMap;
-use std::ops::AddAssign;
-
-extern crate tri_mesh;
+use std::{collections::HashMap, ops::AddAssign};
 use tri_mesh::Mesh;
 
-use crate::mesh_definition;
-use crate::surface_parameterization::laplacian_matrix;
-use crate::surface_parameterization::boundary_matrix;
+use crate::mesh_definition::{TexCoord, MeshTexCoords};
+use crate::surface_parameterization::{laplacian_matrix, boundary_matrix};
 
-use crate::mesh_definition::TexCoord;
-
+/// Represents a triplet in a sparse matrix.
 struct Triplet<T> {
     row: usize,
     col: usize,
     value: T,
 }
 
-
-pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut mesh_definition::MeshTexCoords, use_uniform_weights: bool) {
+/// Performs harmonic parameterization on a mesh.
+pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut MeshTexCoords, use_uniform_weights: bool) {
     // Set which vertices are constrained (i.e. on the boundary)
     let mut is_constrained = Vec::new();
     for vertex_id in mesh.vertex_iter() {
