@@ -45,6 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut processor = mesh_cartography_lib::MeshProcessor::from_mesh(surface_closed);
     let mut uv_mesh = processor.create_uv_surface(file_path);
+    info!("UV mesh created");
 
     // // Get the uv mesh path
     // let uv_mesh_path = processor.mesh_uv_path.clone();
