@@ -396,6 +396,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
 
 [[package]]
+name = "mesh_cartography"
+version = "0.1.0"
+dependencies = [
+ "csv",
+ "env_logger",
+ "getrandom",
+ "log",
+ "miette",
+ "nalgebra",
+ "nalgebra-sparse",
+ "ndarray",
+ "num-traits",
+ "pathfinding",
+ "three-d-asset",
+ "tobj",
+ "tri-mesh",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+ "wavefront_obj",
+ "web-sys",
+]
+
+[[package]]
 name = "miette"
 version = "5.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -484,29 +507,6 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
-]
-
-[[package]]
-name = "new_king"
-version = "0.1.0"
-dependencies = [
- "csv",
- "env_logger",
- "getrandom",
- "log",
- "miette",
- "nalgebra",
- "nalgebra-sparse",
- "ndarray",
- "num-traits",
- "pathfinding",
- "three-d-asset",
- "tobj",
- "tri-mesh",
- "wasm-bindgen",
- "wasm-bindgen-test",
- "wavefront_obj",
- "web-sys",
 ]
 
 [[package]]
