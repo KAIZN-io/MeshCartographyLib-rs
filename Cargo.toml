@@ -3,6 +3,9 @@ name = "mesh_cartography"
 version = "0.1.0"
 authors = ["Jan-Piotraschke <piotraschke.janniklas@gmail.com>"]
 edition = "2021"
+description = "A Rust library for surface mesh based cartography."
+license = "Apache-2.0"
+repository = "https://github.com/KAIZN-io/MeshCartographyLib-rs"
 
 [lib]
 name = "mesh_cartography_lib"
