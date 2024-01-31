@@ -11,6 +11,13 @@
 //! - **Bugs:** -
 //! - **Todo:** -
 
+#[macro_use]
+extern crate log;
+#[cfg(target_os = "macos")]
+use oslog::OsLogger;
+use log::LevelFilter;
+use web_sys::console;
+
 // Import necessary modules and types
 use wasm_bindgen::prelude::*;
 use std::env;
@@ -19,7 +26,6 @@ use tri_mesh::{Mesh, VertexID, Vector3};
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
 use nalgebra::Vector2;
-use web_sys::console;
 
 pub mod mesh_definition;
 use crate::mesh_definition::TexCoord;
@@ -62,6 +68,17 @@ impl Hash for VertexPosition {
         x.hash(state);
         y.hash(state);
         z.hash(state);
+    }
+}
+
+// This function initializes the logger and is intended to be called from main.rs
+pub fn init_logger() {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        OsLogger::new("com.kaizn.meshcartography")
+            .level_filter(LevelFilter::Info)
+            .init()
+            .unwrap();
     }
 }
 
@@ -200,16 +217,19 @@ impl MeshProcessor {
         let cutline_helper = crate::geodesic_distance::gaussian_cut_line_helper::MeshAnalysis::new(self.surface_closed.clone());
         let edge_path: Vec<tri_mesh::HalfEdgeID> = cutline_helper.get_gaussian_cutline();
 
+        info!("Found the cutline");
         // Open up the mesh along the cutline
         let cut_mesh_helper = mesh_cutting::MeshCutting::new(self.surface_closed.clone());
         let surface_mesh = cut_mesh_helper.open_mesh_along_seam(edge_path);
 
+        info!("Mesh opened along the cutline");
         // Save the mesh
         #[cfg(not(target_arch = "wasm32"))] {
             io::save_mesh_as_obj(&surface_mesh, save_path).expect("Failed to save mesh to file");
         }
 
         let (boundary_vertices, mesh_tex_coords) = parameterize_mesh(&surface_mesh);
+        info!("Mesh parameterized");
 
         // Set the fields of the struct
         self.boundary_vertices = boundary_vertices;
@@ -235,17 +255,17 @@ impl MeshProcessor {
             // Compute the angle distortion
             let angle_distortion_helper = mesh_metric::angle_distortion_helper::AngleDistortionHelper::new(&surface_mesh, &uv_mesh);
             let angle_distortion = angle_distortion_helper.compute_angle_distortion();
-            log::info!("Angle distortion: {}", angle_distortion);
+            info!("Angle distortion: {}", angle_distortion);
 
             // Compute the face distortion
             let face_distortion_helper = mesh_metric::face_distortion_helper::FaceDistortionHelper::new(&surface_mesh, &uv_mesh);
             let face_distortion = face_distortion_helper.compute_face_distortion();
-            log::info!("Face distortion: {}", face_distortion);
+            info!("Face distortion: {}", face_distortion);
 
             // Compute the length distortion
             let length_distortion_helper = mesh_metric::length_distortion_helper::LengthDistortionHelper::new(&surface_mesh, &uv_mesh);
             let length_distortion = length_distortion_helper.compute_length_distortion();
-            log::info!("Length distortion: {}", length_distortion);
+            info!("Length distortion: {}", length_distortion);
             uv_mesh
         }
         #[cfg(target_arch = "wasm32")]
@@ -286,7 +306,7 @@ impl MeshProcessor {
             // ! Temp: load the uv_mesh
             let mut uv_mesh = io::load_mesh_from_obj(self.mesh_uv_path.clone()).unwrap();
             tessellation.rotate_and_shift_mesh(&mut uv_mesh, rotation_angle, docking_side);
-            log::info!("docking_side: {}", docking_side);
+            info!("docking_side: {}", docking_side);
 
             // Get the face vertices coordinates
             crate::surface_parameterization::tessellation_helper::collect_face_vertices(&uv_mesh, &mut grouped_face_vertices);

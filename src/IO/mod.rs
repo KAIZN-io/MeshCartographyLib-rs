@@ -92,7 +92,6 @@ fn convert_to_tri_mesh_mesh(tri_mesh: TriMesh) -> std::result::Result<Mesh, Stri
     Ok(mesh)
 }
 
-#[allow(dead_code)]
 pub fn load_mesh_from_obj(path: PathBuf) -> std::result::Result<Mesh, String> {
     // Open the file using the PathBuf
     let mut file = File::open(&path).map_err(|e| e.to_string())?;

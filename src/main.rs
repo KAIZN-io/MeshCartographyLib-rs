@@ -15,12 +15,13 @@ use std::path::PathBuf;
 use std::error::Error;
 use std::env;
 
-extern crate new_king_lib;
-use new_king_lib::io;
+extern crate mesh_cartography_lib;
+use mesh_cartography_lib::io;
+use log::info;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Initialize logger
-    env_logger::init();
+    mesh_cartography_lib::init_logger();
+    info!("Logger initialized.");
 
     let args: Vec<String> = env::args().collect();
 
@@ -34,10 +35,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Load mesh from file
     let mesh_path = PathBuf::from(file_path);
-    let surface_closed = io::load_mesh_from_obj(mesh_path.clone()).unwrap();
+    let surface_closed = match io::load_mesh_from_obj(mesh_path.clone()) {
+        Ok(mesh) => mesh,
+        Err(e) => {
+            eprintln!("Failed to load mesh: {}", e);
+            return Err(e.into());
+        }
+    };
 
-    let mut processor = new_king_lib::MeshProcessor::from_mesh(surface_closed);
+    let mut processor = mesh_cartography_lib::MeshProcessor::from_mesh(surface_closed);
     let mut uv_mesh = processor.create_uv_surface(file_path);
+    info!("UV mesh created");
 
     // // Get the uv mesh path
     // let uv_mesh_path = processor.mesh_uv_path.clone();
