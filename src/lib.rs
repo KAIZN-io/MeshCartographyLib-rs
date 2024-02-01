@@ -107,28 +107,61 @@ fn create_mesh(vertices_id: Vec<Vector3<f64>>, faces_id: Vec<u32>) -> Mesh {
 pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>>) -> Mesh {
     // Flatten the Vec<Vec<Vector3<f64>>> to Vec<Vector3<f64>>
     let combined_vertices: Vec<Vector3<f64>> = grouped_vertices.into_iter().flatten().collect();
+    let (unique_vertices, index_map) = remove_duplicate_vertices(&combined_vertices);
+    let face_indices = create_face_indices(&combined_vertices, &index_map);
 
-    // Remove duplicate vertices
+    // Create the mesh
+    create_mesh(unique_vertices, face_indices)
+}
+
+#[derive(Clone, Copy, Debug)]
+struct HashableVertex(Vector3<f64>);
+
+impl PartialEq for HashableVertex {
+    fn eq(&self, other: &Self) -> bool {
+        const PRECISION: f64 = 1e-10;
+        (self.0.x - other.0.x).abs() < PRECISION &&
+        (self.0.y - other.0.y).abs() < PRECISION &&
+        (self.0.z - other.0.z).abs() < PRECISION
+    }
+}
+
+impl Eq for HashableVertex {}
+
+impl Hash for HashableVertex {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let precision = 1e10 as i64;
+        ((self.0.x * precision as f64).round() as i64).hash(state);
+        ((self.0.y * precision as f64).round() as i64).hash(state);
+        ((self.0.z * precision as f64).round() as i64).hash(state);
+    }
+}
+
+fn remove_duplicate_vertices(combined_vertices: &[Vector3<f64>]) -> (Vec<Vector3<f64>>, HashMap<usize, usize>) {
     let mut unique_vertices = Vec::new();
     let mut index_map = HashMap::new();
+    let mut vertex_map = HashMap::new();
+
     for (original_index, v) in combined_vertices.iter().enumerate() {
-        let new_index = unique_vertices.iter().position(|&x| x == *v);
-        match new_index {
-            Some(index) => {
-                // Vertex is a duplicate, map to existing index
-                index_map.insert(original_index, index);
-            },
-            None => {
-                // Vertex is unique, add to unique_vertices and map to its new index
-                unique_vertices.push(*v);
-                index_map.insert(original_index, unique_vertices.len() - 1);
-            }
+        let hashable_vertex = HashableVertex(*v);
+        if let Some(&index) = vertex_map.get(&hashable_vertex) {
+            index_map.insert(original_index, index);
+        } else {
+            let new_index = unique_vertices.len();
+            unique_vertices.push(*v);
+            vertex_map.insert(hashable_vertex, new_index);
+            index_map.insert(original_index, new_index);
         }
     }
 
-    // Create the face indices
+    (unique_vertices, index_map)
+}
+
+
+fn create_face_indices(combined_vertices: &[Vector3<f64>], index_map: &HashMap<usize, usize>) -> Vec<u32> {
     let mut face_indices = Vec::new();
-    for (original_index, _) in combined_vertices.iter().enumerate().step_by(3) {
+
+    for original_index in (0..combined_vertices.len()).step_by(3) {
         if original_index + 2 < combined_vertices.len() {
             if let (Some(&a), Some(&b), Some(&c)) = (index_map.get(&original_index), index_map.get(&(original_index + 1)), index_map.get(&(original_index + 2))) {
                 face_indices.extend_from_slice(&[a as u32, b as u32, c as u32]);
@@ -136,8 +169,7 @@ pub fn create_mesh_from_grouped_vertices(grouped_vertices: Vec<Vec<Vector3<f64>>
         }
     }
 
-    // Create the mesh
-    create_mesh(unique_vertices, face_indices)
+    face_indices
 }
 
 #[wasm_bindgen]
