@@ -11,19 +11,21 @@
 //! - **Bugs:** -
 //! - **Todo:** -
 
+pub mod monotile_border_trait;
+use monotile_border_trait::MonotileBorder;
+
 pub mod square_border_helper;
 
 use crate::mesh_definition;
 use crate::mesh_definition::TexCoord;
 use std::collections::HashMap;
 use tri_mesh::VertexID;
-use crate::monotile_border::square_border_helper::square_corners;
 
-pub fn get_sub_borders(boundary_vertices: &[VertexID], mesh_tex_coords: &mesh_definition::MeshTexCoords) -> (HashMap<usize, Vec<VertexID>>, HashMap<usize, Vec<TexCoord>>) {
-    // Get the corner coordinates of the square
+pub fn get_sub_borders<B: MonotileBorder>(border_helper: &B, boundary_vertices: &[VertexID], mesh_tex_coords: &mesh_definition::MeshTexCoords) -> (HashMap<usize, Vec<VertexID>>, HashMap<usize, Vec<TexCoord>>) {
+    // Get the corner coordinates of the border
     let origin = TexCoord(0.0, 0.0);
     let side_length = 1.0;
-    let corners = square_corners(origin, side_length);
+    let corners = border_helper.corners(origin, side_length);
 
     let mut border_v_map: HashMap<usize, Vec<VertexID>> = HashMap::new();
     let mut border_map: HashMap<usize, Vec<TexCoord>> = HashMap::new();
@@ -41,7 +43,7 @@ pub fn get_sub_borders(boundary_vertices: &[VertexID], mesh_tex_coords: &mesh_de
         border_map.entry(current_border).or_insert(Vec::new()).push(point.clone());
 
         // Check if we crossed a corner and need to start a new border
-        for corner in corners.iter() {
+        for corner in &corners {
             if (point.0 - corner.0).abs() < 1e-4 && (point.1 - corner.1).abs() < 1e-4 && *v != first_v {
                 current_border += 1;
                 border_v_map.entry(current_border).or_insert(Vec::new()).push(*v);
@@ -56,3 +58,7 @@ pub fn get_sub_borders(boundary_vertices: &[VertexID], mesh_tex_coords: &mesh_de
 
     (border_v_map, border_map)
 }
+
+// Example usage
+// let square_helper = SquareBorderHelper;
+// let (border_v_map, border_map) = get_sub_borders(&square_helper, ...);
