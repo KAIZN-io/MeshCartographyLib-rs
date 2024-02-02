@@ -46,7 +46,7 @@ impl MonotileBorder for HexagonBorderHelper {
             let tex_coord = self.map_to_hexagon(l, side_length);
 
             // Apply tolerance
-            let mut adjusted_tex_coord = TexCoord(
+            let adjusted_tex_coord = TexCoord(
                 if tex_coord.0.abs() < tolerance { 0.0 } else { tex_coord.0 },
                 if tex_coord.1.abs() < tolerance { 0.0 } else { tex_coord.1 },
             );
