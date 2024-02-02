@@ -388,7 +388,7 @@ fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &[VertexID], len
         mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0));  // Initialize to the origin
     }
 
-    let tex_coords = monotile_border::distribute_vertices_around_square(boundary_vertices, side_length, tolerance, length);
+    let tex_coords = monotile_border::square_border_helper::distribute_vertices_around_square(boundary_vertices, side_length, tolerance, length);
 
     for (&vertex_id, tex_coord) in boundary_vertices.iter().zip(tex_coords.iter()) {
         mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tex_coord.0, tex_coord.1));
@@ -651,7 +651,7 @@ mod tests {
             mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0)); // Initialize to the origin
         }
 
-        let tex_coords = monotile_border::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
+        let tex_coords = monotile_border::square_border_helper::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
         for (&vertex_id, tex_coord) in boundary_vertices.iter().zip(tex_coords.iter()) {
             mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tex_coord.0, tex_coord.1));
         }
