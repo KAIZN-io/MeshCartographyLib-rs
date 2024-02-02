@@ -14,6 +14,7 @@
 pub mod monotile_border_trait;
 use monotile_border_trait::MonotileBorder;
 
+pub mod hexagon_border_helper;
 pub mod square_border_helper;
 
 use crate::mesh_definition;
