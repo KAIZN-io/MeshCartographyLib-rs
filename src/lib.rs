@@ -32,6 +32,9 @@ use crate::mesh_definition::TexCoord;
 
 pub mod io;
 mod monotile_border;
+use crate::monotile_border::monotile_border_trait::MonotileBorder;
+// use crate::monotile_border::hexagon_border_helper::HexagonBorderHelper;
+use crate::monotile_border::square_border_helper::SquareBorderHelper;
 
 pub mod geodesic_distance {
     pub mod cached_geodesic_distance_helper;
@@ -309,7 +312,10 @@ impl MeshProcessor {
     // Create the Kachelmuster with Heesch numbers
     pub fn create_tessellation_mesh(&mut self, uv_mesh_centre: &mut Mesh) -> Mesh {
         // ! Temp: load the uv_mesh
-        let (border_v_map, border_map) = monotile_border::get_sub_borders(&self.boundary_vertices, &self.mesh_tex_coords);
+        // let border_helper = HexagonBorderHelper;
+        let border_helper = SquareBorderHelper;
+        let (border_v_map, border_map) = monotile_border::get_sub_borders(&border_helper, &self.boundary_vertices, &self.mesh_tex_coords);
+
         let mesh_file_name = self.mesh_uv_path.file_stem().unwrap().to_str().unwrap().to_string();
         let save_path_uv2 = self.mesh_cartography_lib_dir.join(format!("{}_tessellation.obj", mesh_file_name));
 
@@ -372,13 +378,14 @@ fn parameterize_mesh(surface_mesh: &Mesh) -> (Vec<VertexID>, mesh_definition::Me
     let edge_list = boundary_edges.iter().cloned().collect::<Vec<_>>();  // Collect edges in a Vec to maintain order
     let (boundary_vertices, _) = get_boundary_vertices(&edge_list, &surface_mesh);
 
-    let mut mesh_tex_coords = init_mesh_tex_coords(surface_mesh, &boundary_vertices, length);
+    let mut mesh_tex_coords = init_monotile_tex_coords(surface_mesh, &boundary_vertices, length);
     surface_parameterization::harmonic_parameterization_helper::harmonic_parameterization(surface_mesh, &mut mesh_tex_coords, true);  // Parameterize the mesh
 
     (boundary_vertices, mesh_tex_coords)
 }
 
-fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &[VertexID], length: f64) -> mesh_definition::MeshTexCoords {
+fn init_monotile_tex_coords(surface_mesh: &Mesh, boundary_vertices: &[VertexID], length: f64) -> mesh_definition::MeshTexCoords {
+    // let corner_count = 6;
     let corner_count = 4;
     let side_length = length / corner_count as f64;
     let tolerance = 1e-4;
@@ -388,7 +395,10 @@ fn init_mesh_tex_coords(surface_mesh: &Mesh, boundary_vertices: &[VertexID], len
         mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0));  // Initialize to the origin
     }
 
-    let tex_coords = monotile_border::distribute_vertices_around_square(boundary_vertices, side_length, tolerance, length);
+    // Choose the monotile shape by choosing its border
+    let border_helper = SquareBorderHelper;
+    // let border_helper = HexagonBorderHelper;
+    let tex_coords = border_helper.distribute_vertices_around_monotile(boundary_vertices, side_length, tolerance, length);
 
     for (&vertex_id, tex_coord) in boundary_vertices.iter().zip(tex_coords.iter()) {
         mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tex_coord.0, tex_coord.1));
@@ -651,7 +661,7 @@ mod tests {
             mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(0.0, 0.0)); // Initialize to the origin
         }
 
-        let tex_coords = monotile_border::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
+        let tex_coords = monotile_border::square_border_helper::distribute_vertices_around_square(&boundary_vertices, side_length, tolerance, length);
         for (&vertex_id, tex_coord) in boundary_vertices.iter().zip(tex_coords.iter()) {
             mesh_tex_coords.set_tex_coord(vertex_id, TexCoord(tex_coord.0, tex_coord.1));
         }
