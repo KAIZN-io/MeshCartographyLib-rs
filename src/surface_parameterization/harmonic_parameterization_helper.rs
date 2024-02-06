@@ -138,11 +138,10 @@ pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>
     // update rhs with constraints
     let sparse_matrix_triplets: Vec<Triplet<f64>> = get_tripplets(&l_mtx, &b_mtx, &mut bb_mtx, &idx);
 
-    let dense_mtx = build_dense_matrix(&sparse_matrix_triplets, bb_mtx.nrows());
-
     // Solve the system Lxx = BB using Cholesky decomposition
     let xx = solve_cholesky_using_cpp(&bb_mtx, &sparse_matrix_triplets)?;
 
+    // let dense_mtx = build_dense_matrix(&sparse_matrix_triplets, bb_mtx.nrows());
     // let cholesky = Cholesky::new(dense_mtx).unwrap();
     // let xx = cholesky.solve(&bb_mtx);
 
