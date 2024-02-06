@@ -45,6 +45,10 @@ use crate::monotile_border::monotile_border_trait::MonotileBorder;
 // use crate::monotile_border::hexagon_border_helper::HexagonBorderHelper;
 use crate::monotile_border::square_border_helper::SquareBorderHelper;
 
+pub mod cpp {
+    pub mod cholesky_decomposition_bridge;
+}
+
 pub mod geodesic_distance {
     pub mod cached_geodesic_distance_helper;
     pub mod dijkstra_distance_helper;
