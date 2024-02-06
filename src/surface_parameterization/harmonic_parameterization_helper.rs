@@ -8,7 +8,7 @@
 //!
 //! ## Current Status
 //!
-//! - **Bugs:** -
+//! - **Bugs:** solve_cholesky_using_cpp() does not use the `bb_mtx` parameter.
 //! - **Todo:** Improve the speed of the QR decomposition.
 
 use nalgebra::{DMatrix, Cholesky};
@@ -68,6 +68,60 @@ pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut MeshTexCoord
     }
 }
 
+
+
+// ? Warum müssen wir dense_mtx UND sparse_matrix_triplets an die C++ Funktion übergeben?
+// ?! UND wo ist bb_mtx in der C++ Funktion?
+fn solve_cholesky_using_cpp(dense_mtx: &DMatrix<f64>, sparse_matrix_triplets: &[Triplet<f64>]) -> Result<DMatrix<f64>, String> {
+    // Convert the triplets into separate vectors for rows, columns, and values
+    let rows: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.row).collect();
+    let cols: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.col).collect();
+    let values: Vec<f64> = sparse_matrix_triplets.iter().map(|t| t.value).collect();
+
+    // Assuming you have already created a dense matrix and have its pointer, nrows, and ncols
+    let ptr = dense_mtx.as_ptr();
+    let nrows = dense_mtx.nrows() as u64; // Cast to u64 first
+    let ncols = dense_mtx.ncols() as u64; // Cast to u64 first
+
+    // Convert nrows and ncols to autocxx::c_ulong if required
+    let mtx_nrows_c = autocxx::c_ulong::from(nrows);
+    let mtx_ncols_c = autocxx::c_ulong::from(ncols);
+
+    // Call the C++ function
+    let rows_c_ulong: Vec<autocxx::c_ulong> = rows.iter().map(|&r| autocxx::c_ulong::from(r as u64)).collect();
+    let cols_c_ulong: Vec<autocxx::c_ulong> = cols.iter().map(|&c| autocxx::c_ulong::from(c as u64)).collect();
+
+    let rows_ptr = rows_c_ulong.as_ptr();
+    let cols_ptr = cols_c_ulong.as_ptr();
+    let mut output: Vec<f64> = vec![0.0; dense_mtx.nrows() * dense_mtx.ncols()];
+
+    #[cfg(target_pointer_width = "64")]
+    unsafe {
+        ffi::cholesky_decomposition(
+            ptr,
+            mtx_nrows_c,
+            mtx_ncols_c,
+            rows_ptr,
+            cols_ptr,
+            values.as_ptr(),
+            autocxx::c_ulong::from(rows.len() as u64),
+            output.as_mut_ptr()
+        )
+    };
+
+    // Convert the output to a DMatrix
+    let mut xx = DMatrix::zeros(nrows as usize, ncols as usize);
+    for i in 0..nrows {
+        for j in 0..ncols {
+            xx[(i as usize, j as usize)] = output[(i * ncols + j) as usize];
+        }
+    }
+
+    Ok(xx)
+}
+
+
+
 pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>, is_constrained: Vec<bool>) -> Result<DMatrix<f64>, String> {
     let nrows = l_mtx.nrows();
     let mut idx = vec![usize::MAX; nrows];
@@ -89,42 +143,10 @@ pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>
 
     let dense_mtx = build_dense_matrix(&sparse_matrix_triplets, bb_mtx.nrows());
 
-    // Convert the triplets into separate vectors for rows, columns, and values
-    let rows: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.row).collect();
-    let cols: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.col).collect();
-    let values: Vec<f64> = sparse_matrix_triplets.iter().map(|t| t.value).collect();
-
-    // Assuming you have already created a dense matrix and have its pointer, nrows, and ncols
-    let ptr = dense_mtx.as_ptr();
-    let nrows = dense_mtx.nrows() as u64; // Cast to u64 first
-    let ncols = dense_mtx.ncols() as u64; // Cast to u64 first
-
-    // Convert nrows and ncols to autocxx::c_ulong if required
-    let nrows_c = autocxx::c_ulong::from(nrows);
-    let ncols_c = autocxx::c_ulong::from(ncols);
-
-    // Call the C++ function
-    let rows_c_ulong: Vec<autocxx::c_ulong> = rows.iter().map(|&r| autocxx::c_ulong::from(r as u64)).collect();
-    let cols_c_ulong: Vec<autocxx::c_ulong> = cols.iter().map(|&c| autocxx::c_ulong::from(c as u64)).collect();
-
-    let rows_ptr = rows_c_ulong.as_ptr();
-    let cols_ptr = cols_c_ulong.as_ptr();
-    let mut output: Vec<f64> = vec![0.0; dense_mtx.nrows() * dense_mtx.ncols()];
-
-    #[cfg(target_pointer_width = "64")]
-    unsafe {
-        ffi::cholesky_decomposition(ptr, nrows_c, ncols_c, rows_ptr, cols_ptr, values.as_ptr(), autocxx::c_ulong::from(rows.len() as u64), output.as_mut_ptr())
-    };
-
-    // Convert the output to a DMatrix
-    let mut xx = DMatrix::zeros(nrows as usize, ncols as usize);
-    for i in 0..nrows {
-        for j in 0..ncols {
-            xx[(i as usize, j as usize)] = output[(i * ncols + j) as usize];
-        }
-    }
-
     // Solve the system Lxx = BB using Cholesky decomposition
+    // ! BUG, da bb_mtx nicht in der C++ Funktion verwendet wird
+    let xx = solve_cholesky_using_cpp(&dense_mtx, &sparse_matrix_triplets)?;
+
     // let cholesky = Cholesky::new(dense_mtx).unwrap();
     // let xx = cholesky.solve(&bb_mtx);
 
