@@ -6,11 +6,23 @@ SHELL := /bin/bash
 PROJECT_DIR := $(shell pwd)
 export Meshes_Dir := $(PROJECT_DIR)/test/meshes
 
+# Platform selection
+PLATFORM ?= executive
+BUILD_DIR = target/release
+ifeq ($(PLATFORM), wasm)
+	CMAKE_CMD = emcmake cmake
+	BUILD_CMD = emmake ninja
+	BUILD_DIR = embuild
+else
+	CMAKE_CMD = cmake
+	BUILD_CMD = ninja
+endif
+
 # Determine OS
 OS := $(shell uname -s)
 
 .PHONY: all
-all: build_rust
+all: check_submodule build_rust
 
 .PHONY: build_rust
 build_rust:
@@ -35,6 +47,30 @@ test:
 .PHONY: wasm
 wasm:
 	wasm-pack build --target web
+
+.PHONY: check_submodule
+check_submodule:
+	@if [ ! "$(shell git submodule status | grep pmp-library | cut -c 1)" = "-" ]; then \
+		echo "PMP library submodule already initialized and updated."; \
+	else \
+		echo "PMP library submodule is empty. Initializing and updating..."; \
+		git submodule update --init -- pmp-library; \
+		$(MAKE) install_pmp; \
+	fi
+
+.PHONY: update_pmp
+update_pmp:
+	@echo "Updating PMP library submodule..."; \
+	git submodule update --remote pmp-library;
+
+.PHONY: install_pmp
+install_pmp:
+	@echo "Installing PMP library..."; \
+	mkdir -p $(BUILD_DIR)/pmp-library; \
+	cd $(BUILD_DIR)/pmp-library && \
+	$(CMAKE_CMD) -G Ninja $(PROJECT_DIR)/pmp-library -DCMAKE_BUILD_TYPE=Release && \
+	ninja && \
+	sudo ninja install;
 
 # Cleaning
 .PHONY: clean
