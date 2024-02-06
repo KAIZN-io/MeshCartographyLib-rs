@@ -58,5 +58,3 @@ extern "C" double eigen_operations(const double* data, std::size_t nrows, std::s
     Eigen::Map<const Eigen::MatrixXd> mat(data, nrows, ncols);
     return mat.determinant();
 }
-
-inline uint32_t add_numbers(uint32_t a, uint32_t b) { return a+b; }

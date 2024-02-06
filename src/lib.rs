@@ -23,7 +23,6 @@ use autocxx::prelude::*;
 include_cpp! {
     #include "input.h"
     safety!(unsafe_ffi)
-    generate!("add_numbers")
     generate!("eigen_operations")
     generate!("cholesky_decomposition")
 }
