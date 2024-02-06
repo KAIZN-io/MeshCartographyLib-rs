@@ -8,8 +8,8 @@
 //!
 //! ## Current Status
 //!
-//! - **Bugs:** solve_cholesky_using_cpp() does not use the `bb_mtx` parameter.
-//! - **Todo:** Improve the speed of the QR decomposition.
+//! - **Bugs:**
+//! - **Todo:**
 
 use nalgebra::{DMatrix, Cholesky};
 use nalgebra_sparse::CsrMatrix;
@@ -69,19 +69,16 @@ pub fn harmonic_parameterization(mesh: &Mesh, mesh_tex_coords: &mut MeshTexCoord
 }
 
 
-
-// ? Warum müssen wir dense_mtx UND sparse_matrix_triplets an die C++ Funktion übergeben?
-// ?! UND wo ist bb_mtx in der C++ Funktion?
-fn solve_cholesky_using_cpp(dense_mtx: &DMatrix<f64>, sparse_matrix_triplets: &[Triplet<f64>]) -> Result<DMatrix<f64>, String> {
+fn solve_cholesky_using_cpp(bb_mtx: &DMatrix<f64>, sparse_matrix_triplets: &[Triplet<f64>]) -> Result<DMatrix<f64>, String> {
     // Convert the triplets into separate vectors for rows, columns, and values
     let rows: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.row).collect();
     let cols: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.col).collect();
     let values: Vec<f64> = sparse_matrix_triplets.iter().map(|t| t.value).collect();
 
     // Assuming you have already created a dense matrix and have its pointer, nrows, and ncols
-    let ptr = dense_mtx.as_ptr();
-    let nrows = dense_mtx.nrows() as u64; // Cast to u64 first
-    let ncols = dense_mtx.ncols() as u64; // Cast to u64 first
+    let ptr = bb_mtx.as_ptr();
+    let nrows = bb_mtx.nrows() as u64; // Cast to u64 first
+    let ncols = bb_mtx.ncols() as u64; // Cast to u64 first
 
     // Convert nrows and ncols to autocxx::c_ulong if required
     let mtx_nrows_c = autocxx::c_ulong::from(nrows);
@@ -93,7 +90,7 @@ fn solve_cholesky_using_cpp(dense_mtx: &DMatrix<f64>, sparse_matrix_triplets: &[
 
     let rows_ptr = rows_c_ulong.as_ptr();
     let cols_ptr = cols_c_ulong.as_ptr();
-    let mut output: Vec<f64> = vec![0.0; dense_mtx.nrows() * dense_mtx.ncols()];
+    let mut output: Vec<f64> = vec![0.0; bb_mtx.nrows() * bb_mtx.ncols()];
 
     #[cfg(target_pointer_width = "64")]
     unsafe {
@@ -144,8 +141,7 @@ pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>
     let dense_mtx = build_dense_matrix(&sparse_matrix_triplets, bb_mtx.nrows());
 
     // Solve the system Lxx = BB using Cholesky decomposition
-    // ! BUG, da bb_mtx nicht in der C++ Funktion verwendet wird
-    let xx = solve_cholesky_using_cpp(&dense_mtx, &sparse_matrix_triplets)?;
+    let xx = solve_cholesky_using_cpp(&bb_mtx, &sparse_matrix_triplets)?;
 
     // let cholesky = Cholesky::new(dense_mtx).unwrap();
     // let xx = cholesky.solve(&bb_mtx);
