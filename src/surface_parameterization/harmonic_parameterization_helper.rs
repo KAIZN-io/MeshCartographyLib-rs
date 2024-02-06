@@ -94,11 +94,6 @@ pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>
     let cols: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.col).collect();
     let values: Vec<f64> = sparse_matrix_triplets.iter().map(|t| t.value).collect();
 
-    let (rows_u64, cols_u64): (Vec<u64>, Vec<u64>) = (
-        rows.iter().map(|&r| r as u64).collect(),
-        cols.iter().map(|&c| c as u64).collect(),
-    );
-
     // Assuming you have already created a dense matrix and have its pointer, nrows, and ncols
     let ptr = dense_mtx.as_ptr();
     let nrows = dense_mtx.nrows() as u64; // Cast to u64 first
@@ -109,21 +104,29 @@ pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>
     let ncols_c = autocxx::c_ulong::from(ncols);
 
     // Call the C++ function
-    // Make sure to use `unsafe` block as we are dealing with raw pointers
     let rows_c_ulong: Vec<autocxx::c_ulong> = rows.iter().map(|&r| autocxx::c_ulong::from(r as u64)).collect();
     let cols_c_ulong: Vec<autocxx::c_ulong> = cols.iter().map(|&c| autocxx::c_ulong::from(c as u64)).collect();
 
     let rows_ptr = rows_c_ulong.as_ptr();
     let cols_ptr = cols_c_ulong.as_ptr();
+    let mut output: Vec<f64> = vec![0.0; dense_mtx.nrows() * dense_mtx.ncols()];
 
     #[cfg(target_pointer_width = "64")]
-    let xx_test = unsafe {
-        ffi::cholesky_decomposition(ptr, nrows_c, ncols_c, rows_ptr, cols_ptr, values.as_ptr(), autocxx::c_ulong::from(rows.len() as u64))
+    unsafe {
+        ffi::cholesky_decomposition(ptr, nrows_c, ncols_c, rows_ptr, cols_ptr, values.as_ptr(), autocxx::c_ulong::from(rows.len() as u64), output.as_mut_ptr())
     };
 
+    // Convert the output to a DMatrix
+    let mut xx = DMatrix::zeros(nrows as usize, ncols as usize);
+    for i in 0..nrows {
+        for j in 0..ncols {
+            xx[(i as usize, j as usize)] = output[(i * ncols + j) as usize];
+        }
+    }
+
     // Solve the system Lxx = BB using Cholesky decomposition
-    let cholesky = Cholesky::new(dense_mtx).unwrap();
-    let xx = cholesky.solve(&bb_mtx);
+    // let cholesky = Cholesky::new(dense_mtx).unwrap();
+    // let xx = cholesky.solve(&bb_mtx);
 
     // Fill in the solution X
     let mut x_mtx = DMatrix::zeros(b_mtx.nrows(), b_mtx.ncols());
