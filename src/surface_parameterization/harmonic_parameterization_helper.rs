@@ -26,7 +26,7 @@ include_cpp! {
     #include "input.h"
     safety!(unsafe_ffi)
     generate!("eigen_operations")
-    // generate!("cholesky_decomposition")
+    generate!("cholesky_decomposition")
 }
 
 /// Represents a triplet in a sparse matrix.
@@ -88,6 +88,38 @@ pub fn solve_using_qr_decomposition(l_mtx: &CsrMatrix<f64>, b_mtx: &DMatrix<f64>
     let sparse_matrix_triplets: Vec<Triplet<f64>> = get_tripplets(&l_mtx, &b_mtx, &mut bb_mtx, &idx);
 
     let dense_mtx = build_dense_matrix(&sparse_matrix_triplets, bb_mtx.nrows());
+
+    // Convert the triplets into separate vectors for rows, columns, and values
+    let rows: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.row).collect();
+    let cols: Vec<usize> = sparse_matrix_triplets.iter().map(|t| t.col).collect();
+    let values: Vec<f64> = sparse_matrix_triplets.iter().map(|t| t.value).collect();
+
+    let (rows_u64, cols_u64): (Vec<u64>, Vec<u64>) = (
+        rows.iter().map(|&r| r as u64).collect(),
+        cols.iter().map(|&c| c as u64).collect(),
+    );
+
+    // Assuming you have already created a dense matrix and have its pointer, nrows, and ncols
+    let ptr = dense_mtx.as_ptr();
+    let nrows = dense_mtx.nrows() as u64; // Cast to u64 first
+    let ncols = dense_mtx.ncols() as u64; // Cast to u64 first
+
+    // Convert nrows and ncols to autocxx::c_ulong if required
+    let nrows_c = autocxx::c_ulong::from(nrows);
+    let ncols_c = autocxx::c_ulong::from(ncols);
+
+    // Call the C++ function
+    // Make sure to use `unsafe` block as we are dealing with raw pointers
+    let rows_c_ulong: Vec<autocxx::c_ulong> = rows.iter().map(|&r| autocxx::c_ulong::from(r as u64)).collect();
+    let cols_c_ulong: Vec<autocxx::c_ulong> = cols.iter().map(|&c| autocxx::c_ulong::from(c as u64)).collect();
+
+    let rows_ptr = rows_c_ulong.as_ptr();
+    let cols_ptr = cols_c_ulong.as_ptr();
+
+    #[cfg(target_pointer_width = "64")]
+    let xx_test = unsafe {
+        ffi::cholesky_decomposition(ptr, nrows_c, ncols_c, rows_ptr, cols_ptr, values.as_ptr(), autocxx::c_ulong::from(rows.len() as u64))
+    };
 
     // Solve the system Lxx = BB using Cholesky decomposition
     let cholesky = Cholesky::new(dense_mtx).unwrap();

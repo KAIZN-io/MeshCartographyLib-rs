@@ -25,7 +25,7 @@ include_cpp! {
     safety!(unsafe_ffi)
     generate!("add_numbers")
     generate!("eigen_operations")
-    // generate!("cholesky_decomposition")
+    generate!("cholesky_decomposition")
 }
 
 // Import necessary modules and types
