@@ -20,6 +20,15 @@ use tri_mesh::Mesh;
 use crate::mesh_definition::{TexCoord, MeshTexCoords};
 use crate::surface_parameterization::{laplacian_matrix, boundary_matrix};
 
+use autocxx::prelude::*;
+// Including the C++ header file
+include_cpp! {
+    #include "input.h"
+    safety!(unsafe_ffi)
+    generate!("eigen_operations")
+    // generate!("cholesky_decomposition")
+}
+
 /// Represents a triplet in a sparse matrix.
 struct Triplet<T> {
     row: usize,
@@ -221,5 +230,19 @@ mod tests {
         // Assert results
         assert_eq!(csr_matrix.values(), &expected_values);
         assert_eq!(csr_matrix.col_indices(), &expected_col_indices);
+    }
+
+    #[test]
+    fn test_eigen_determinant() {
+        let matrix = nalgebra::Matrix2::new(1.0, 2.0, 3.0, 4.0);
+        let nrows = matrix.nrows() as u64;
+        let ncols = matrix.ncols() as u64;
+        let ptr = matrix.as_ptr();
+
+        let determinant = unsafe {
+            ffi::eigen_operations(ptr, autocxx::c_ulong(nrows), autocxx::c_ulong(ncols))
+        };
+
+        assert_eq!(determinant, -2.0);
     }
 }
